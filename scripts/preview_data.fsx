@@ -123,5 +123,8 @@ let data = lazy(
     THotQA.Load(str)
 )
 
+data.Value.[0].Context.[0].Array.[0]
+data.Value.[0].Context.[0].String
+
 let vs = data.Value
 vs.[1].SupportingFacts

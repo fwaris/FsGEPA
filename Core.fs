@@ -1,4 +1,4 @@
-﻿namespace FsGEPA
+﻿namespace FsGepa
 open System
 (*
 Compound AI System Optimization. Given Φ, let ΠΦ = ⟨π1, . . . , π|M|⟩ denote the collection of all module
@@ -11,8 +11,9 @@ rate, etc.). The optimization problem is thus defined by:
 
 type Config = {
     budget : int
+    miniBatch : int
+    totalFeedbackSize : int
 }
-
 
 type Prompt = {
     text : string
@@ -22,13 +23,11 @@ type Model = {
     id : string
 }
 
+///Captures incidental information (e.g. thought traces) produced besides the main output during flow execution
+type ExecutionTrace = {moduleId:string; trace:string}
 
 ///Captures incidental information produce during the evaluation of an input-output pair
-type EvaluationTrace = EvaluationTrace of string
-
-///Captures incidental information (e.g. thought traces) produced besides the main output during flow execution
-type ExecutionTrace = ExecutionTrace of string
-
+type Feedback = Feedback of string
 
 ///<summary>
 /// Prompt + model combination.<br />
@@ -43,16 +42,23 @@ type GeModule<'input, 'output> = {
     outputType: 'output
 }
 
-type GeTask<'input,'output> = {
-    input : 'input
-    eval : Config -> 'output * ExecutionTrace -> Async<float*EvaluationTrace>
+type Eval = {
+    score : float
+    feedback : Feedback
+    traces : ExecutionTrace list
 }
 
+type GeTask<'input,'output> = {
+    input : 'input
+    eval : Config -> 'output * ExecutionTrace list -> Async<Eval>
+   }
+
 ///<summary>
-/// Control flow: runs input through one or more modules, possibly multiple times.<br />
-/// Processing may interweave tool calls or other non-module invocations.
+/// Candidate 'system' (phi) with modules and control flow.<br />
+/// Flow processing may interweave tool calls or other non-module invocations.
 ///</summary>
-type GeFlow<'input,'output> = {
+type GeSystem<'input,'output> = {
     modules : Map<string,GeModule<obj,obj>>
-    Flow : Config -> Map<string,GeModule<obj,obj>> -> 'input -> Async<'output * ExecutionTrace>
+    flow : Config -> Map<string,GeModule<obj,obj>> -> 'input -> Async<'output * ExecutionTrace list>
 }
+
