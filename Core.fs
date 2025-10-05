@@ -13,6 +13,9 @@ type Config = {
     budget : int
     miniBatch : int
     totalFeedbackSize : int
+    reflect_merge_split : float
+    max_attempts_merge_pair : int
+    max_attempts_find_pair : int
 }
 
 type Prompt = {
