@@ -23,26 +23,6 @@ module Merge =
         ancestors
         |> Set.exists (fun p -> Set.contains (set [a;b;p]) comboSet |> not)
 
-    let rec findMergePair parms poolMap attempts = 
-        if attempts > 0 then 
-            match samplePair parms parms.cfg.max_attempts_find_pair with 
-            | Some (a,b) ->
-                let pAs = ancestors poolMap a
-                let pBs = ancestors poolMap b
-                if pAs.Contains b.id || pBs.Contains a.id then
-                    findMergePair parms poolMap (attempts - 1)
-                else
-                    let commonParents = Set.intersect pAs pBs 
-                    if commonParents.IsEmpty then 
-                        findMergePair parms poolMap (attempts - 1)
-                    elif not (newComboPossible parms.comboSet (a.id,b.id,commonParents)) then 
-                         findMergePair parms poolMap (attempts - 1)
-                    else
-                        Some (a,b,commonParents)
-            | None -> None
-        else
-            None
-
     let promptsList (a,b,p) = 
         a.sys.modules 
         |> Map.toList
@@ -52,21 +32,46 @@ module Merge =
         promptsList (a,b,p)
         |> List.exists (fun (_,(aPr,bPr,pPr)) -> (pPr = aPr && aPr <> bPr) || (pPr = bPr && aPr <> bPr))
 
-    let setPrompt k prompt candidate = 
-        let m' = {candidate.sys.modules.[k] with prompt = prompt}
-        {candidate with sys = {candidate.sys with modules = candidate.sys.modules |> Map.add k m'}}
+    let isDesirable poolMap (a,b) pid = 
+        let p = poolMap |> Map.find pid
+        desirable(a,b,p)
 
-    let merge parms (a,b,p) =
-        let c = {p with id=FsGepa.Utils.newId()}
-        let c' =
-            (c,promptsList (a,b,p))
-            ||> List.fold(fun c (k,(aPr,bPr,pPr)) -> 
-                let newPr = 
-                    if pPr = aPr && aPr <> bPr then 
-                        Some bPr
-                    elif pPr = bPr && aPr <> bPr then 
-                        Some aPr
-                    elif aPr <> bPr && aPr <> pPr && pPr <> bPr then
+    let rec findMergePair parms poolMap attempts = 
+        if attempts > 0 then 
+            match samplePair parms parms.cfg.max_attempts_find_pair with 
+            | Some (a,b) ->
+                let pAs = ancestors poolMap a
+                let pBs = ancestors poolMap b
+                if pAs.Contains b.id || pBs.Contains a.id then
+                    findMergePair parms poolMap (attempts - 1)
+                else
+                    let commonParents = Set.intersect pAs pBs
+                    let combos = commonParents |> Set.map (fun p -> set [a.id;b.id;p]) 
+                    let untriedCombos = Set.difference parms.comboSet combos
+                    let untriedParents = untriedCombos |> Set.map(fun xs -> xs |> Set.filter (fun i -> i <> a.id && i <> b.id) |> Seq.head)
+                    let desirable = untriedParents |> Set.filter (isDesirable poolMap (a,b))
+                    if desirable.IsEmpty then 
+                        findMergePair parms poolMap (attempts - 1)
+                    else 
+                        Some(a,b,desirable)
+            | None -> None
+        else
+            None
+
+    let setPrompt k prompt (sys:FsGepa.GeSystem<_,_>) = 
+        let m' = {sys.modules.[k] with prompt = prompt}
+        {sys with modules = sys.modules |> Map.add k m'}
+
+    let merge (a,b,p) =
+        let updatedPrompts = 
+            promptsList (a,b,p)
+            |> List.choose(fun (k,(aPr,bPr,pPr)) -> 
+                if pPr = aPr && aPr <> bPr then 
+                    Some (k,bPr)
+                elif pPr = bPr && aPr <> bPr then 
+                    Some (k,aPr)
+                elif aPr <> bPr && aPr <> pPr && pPr <> bPr then
+                    let pr = 
                         [a.avgScore, aPr; b.avgScore, bPr; p.avgScore, pPr]
                         |> List.groupBy fst
                         |> List.sortByDescending fst
@@ -74,32 +79,31 @@ module Merge =
                         |> snd
                         |> FsGepa.Utils.randSelect //tie break
                         |> snd
-                        |> Some
-                    else 
-                        None
-                newPr 
-                |> Option.map(fun pr -> setPrompt k pr c)
-                |> Option.defaultValue c
-            )
-        {parms with candidates = c'::parms.candidates}
+                    Some (k,pr)
+                else 
+                    None)
+        if updatedPrompts.IsEmpty then 
+            None // try next combo
+        else 
+            (p.sys,updatedPrompts)
+            ||> List.fold(fun c (k,pr) -> setPrompt k pr c)
+            |> Some
         
-    let tryProposeFromPair parms (a,b,ancestors) = 
+
+    let tryMergeFromParent (combos:Set<Set<string>>) (a,b,p) = 
+        let combo = set [a.id; b.id; p.id]
+        let combos = Set.add combo combos
+        let newParent = merge (a,b,p)
+        combos,Some newParent
+        
+    let tryProposeFromPair parms (a,b,ancestors) =
+        let refSet = ref parms.comboSet
         ((parms.comboSet,None),ancestors)
-        |> Seq.scan (fun (combos,_) ancestor -> tryMerge combos (a,b,ancestor))
-        |> Seq.choose snd 
+        ||> Seq.scan (fun (combos,_) ancestor -> tryMergeFromParent combos (a,b,ancestor))
+        |> Seq.skipWhile (fun (combos,n) -> refSet.Value <- combos; n.IsNone)
         |> Seq.tryHead
-
-
-        return 
-            (parms,ancestors)
-            ||> Seq.fold (fun parms p -> 
-                let combo = set [a.id; b.id; p.id]
-                if parms.comboSet.Contains combo then parms
-                elif p.avgScore > min a.avgScore b.avgScore then parms
-                elif not (desirable (a,b,p)) then parms 
-                else merge {parms with comboSet = Set.add combo parms.comboSet} (a,b,p)
-            )
-    
+        |> Option.map(fun (_,n) -> Merge (n, refSet.Value))
+        |> Option.defaultValue (Merge (None,refSet.Value))
 
     let tryProposeCandidate (parms:ProposeParms<_,_>) : Async<MergeProposal<_,_>> = 
         let proposal =
@@ -108,6 +112,6 @@ module Merge =
             else 
                 let poolMap = parms.pool |> List.map(fun x -> x.id,x) |> Map.ofList
                 match findMergePair parms poolMap parms.cfg.max_attempts_merge_pair with 
-                | Some (a,b,ancestors) -> tryProposeFromPair parms (a,b,ancestors)
+                | Some (a,b,ancsIds) -> tryProposeFromPair parms (a,b,ancsIds |> Set.toList |> List.map(fun id -> poolMap.[id]))
                 | None -> Merge (None,parms.comboSet)
         async{return proposal}
