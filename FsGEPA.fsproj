@@ -1,10 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
-
   <ItemGroup>
     <None Include="scripts\download.fsx" />
     <None Include="scripts\packages.fsx" />
@@ -14,11 +12,13 @@
     <Compile Include="Core.fs" />
     <Compile Include="Llm.fs" />
     <Compile Include="Run.fs" />
+    <Compile Include="Pareto.fs" />
+    <Compile Include="Merge.fs" />
+    <Compile Include="Reflective.fs" />
+    <Compile Include="Gepa.fs" />
   </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="FSharp.Control.AsyncSeq" Version="3.2.1" />
     <PackageReference Include="FSharp.SystemTextJson" Version="1.4.36" />
   </ItemGroup>
-
 </Project>
