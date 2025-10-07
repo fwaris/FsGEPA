@@ -361,7 +361,9 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
-.idea/.idea.FsOperator/.idea/indexLayout.xml
-.idea/.idea.FsOperator/.idea/projectSettingsUpdater.xml
-.idea/.idea.FsOperator/.idea/vcs.xml
-.idea/.idea.FsOperator/.idea/workspace.xml
+.idea/
+.DS_Store*
+
+.DS_Store
+src/.DS_Store
+src/FsGepa/.DS_Store
