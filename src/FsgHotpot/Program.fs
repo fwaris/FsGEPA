@@ -1,2 +1,8 @@
-﻿// For more information see https://aka.ms/fsharp-console-apps
-printfn "Hello from F#"
+﻿namespace FsgHotpot
+open System
+
+module Pgm = 
+    [<EntryPoint>]
+    let main args = 
+        0
+// F

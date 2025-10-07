@@ -7,6 +7,9 @@ open System.Text.Json.Serialization
 [<AutoOpen>]
 module Utils =
     open System.Text.Encodings.Web
+
+    let home = Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile)
+
     let inline debug (s:'a) = System.Diagnostics.Debug.WriteLine(s)
     
     let (===) (a:string) (b:string) = a.Equals(b,StringComparison.CurrentCultureIgnoreCase)

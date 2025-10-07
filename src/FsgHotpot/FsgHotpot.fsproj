@@ -1,12 +1,18 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
   </PropertyGroup>
-
   <ItemGroup>
+    <Compile Include="Sample.fs" />
+    <Compile Include="GenAI.fs" />
+    <Compile Include="Opt.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
-
+  <ItemGroup>
+    <ProjectReference Include="..\FsGepa\FsGepa.fsproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FSharp.Data" Version="6.6.0" />
+  </ItemGroup>
 </Project>

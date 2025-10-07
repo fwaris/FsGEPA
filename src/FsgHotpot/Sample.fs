@@ -1,10 +1,8 @@
-﻿#load "packages.fsx"
-open Packages
-open System
-open FSharp.Data
+namespace FsgHotpot
 
-[<Literal>]
-let TYPE_SAMPLE = """
+module Samples =     
+    [<Literal>]
+    let TYPE_SAMPLE = """
 [
     {
         "_id": "5a8b57f25542995d1e6f1371",
@@ -224,23 +222,3 @@ let TYPE_SAMPLE = """
 }
 ]
 """
-
-
-type THotQA = JsonProvider<TYPE_SAMPLE> 
-let file = home @@ "Downloads" @@ "hotpot_dev_distractor_v1.json" 
-
-let data = lazy(
-    use str = IO.File.OpenRead file
-    THotQA.Load(str)
-)
-
-data.Value.[0].Context.[0].Array.[0]
-data.Value.[0].Context.[0].String
-
-let vs = data.Value
-let t1 = data.Value.[100]
-t1.Answer
-t1.Context
-t1.Question
-t1.SupportingFacts
-data.Value.[1].JsonValue |> string |> printfn "%s"
