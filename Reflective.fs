@@ -4,11 +4,11 @@ open FsGepa
 
 module Reflective = 
     
-    let filterEval mid (evaledTask:EvaledTask<_,_>) = 
+    let filterEval<'a,'b> mid (evaledTask:EvaledTask<'a,'b>) = 
         let traces = evaledTask.eval.traces |> List.filter (fun t -> t.moduleId = mid)
         {evaledTask with eval.traces=traces}
 
-    let filterEvals cfg moduleId = List.map (filterEval moduleId)
+    let filterEvals<'a,'b> cfg moduleId = List.map (filterEval<'a,'b> moduleId)
 
     let setPrompt sys m prompt = 
         {sys with 

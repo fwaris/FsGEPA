@@ -3,11 +3,6 @@ namespace FsGepa.Run
 open FSharp.Control
 open FsGepa
 
-type EvaledTask<'a,'b> = {
-    index : int
-    task : GeTask<'a,'b>
-    eval : Eval
-}
 
 type GrSystem<'a,'b> = {
     id : string
@@ -58,7 +53,7 @@ module Run =
 
     let evalTask cfg ((i,(t:GeTask<_,_>)),o) = 
         async {
-            let! e = t.eval cfg o
+            let! e = t.evaluate cfg o
             return {index=i; task=t;eval=e}
         }
 

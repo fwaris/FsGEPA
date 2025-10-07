@@ -93,8 +93,8 @@ module Merge =
     let tryMergeFromParent (combos:Set<Set<string>>) (a,b,p) = 
         let combo = set [a.id; b.id; p.id]
         let combos = Set.add combo combos
-        let newParent = merge (a,b,p)
-        combos,Some newParent
+        let proposed = merge (a,b,p)
+        combos, proposed |> Option.map(fun c -> {candidate=c; parentId=p.id; parentMBScore = p.avgScore})
         
     let tryProposeFromPair parms (a,b,ancestors) =
         let refSet = ref parms.comboSet

@@ -6,6 +6,7 @@ open System.Text.Json.Serialization
 
 [<AutoOpen>]
 module Utils =
+    open System.Text.Encodings.Web
     let inline debug (s:'a) = System.Diagnostics.Debug.WriteLine(s)
     
     let (===) (a:string) (b:string) = a.Equals(b,StringComparison.CurrentCultureIgnoreCase)
@@ -46,3 +47,24 @@ module Utils =
             .WithAllowNullFields(true)
             .AddToJsonSerializerOptions(o)        
         o)
+        
+    ///<summary>
+    ///Json serialization options suitable for deserializing OpenAI 'structured output'.<br />
+    ///Note: can use simple enums, in such types but not F# DUs
+    ///</summary>
+    /// 
+    let openAIResponseSerOpts =
+        let o = JsonSerializerOptions(JsonSerializerDefaults.General)
+        o.Converters.Add(JsonStringEnumConverter())
+        o.WriteIndented <- true
+        o.Encoder <- JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        o.ReadCommentHandling <- JsonCommentHandling.Skip
+        let opts = JsonFSharpOptions.Default()
+        opts
+            .WithSkippableOptionFields(true)
+            .AddToJsonSerializerOptions(o)
+        o
+
+    ///Serialize object to json with minimal escaping
+    let formatJson<'t>(j:'t) =
+        JsonSerializer.Serialize(j,openAIResponseSerOpts)

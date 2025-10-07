@@ -9,6 +9,9 @@ then measures the output quality of y with respect to metadata m (for example by
 rate, etc.). The optimization problem is thus defined by:
 *)
 
+type IGenerate =
+    abstract member generate : systemMessage:string option -> prompt:string -> responseFormat:Type option -> Async<string>
+
 type Config = {
     budget : int
     miniBatch : int
@@ -16,6 +19,7 @@ type Config = {
     reflect_merge_split : float
     max_attempts_merge_pair : int
     max_attempts_find_pair : int
+    generate : IGenerate
 }
 
 type Prompt = {
@@ -31,6 +35,7 @@ type ExecutionTrace = {moduleId:string; trace:string}
 
 ///Captures incidental information produce during the evaluation of an input-output pair
 type Feedback = Feedback of string
+    with member this.text = function Feedback s -> s
 
 ///<summary>
 /// Prompt + model combination.<br />
@@ -53,8 +58,14 @@ type Eval = {
 
 type GeTask<'input,'output> = {
     input : 'input
-    eval : Config -> 'output * ExecutionTrace list -> Async<Eval>
+    evaluate : Config -> 'output * ExecutionTrace list -> Async<Eval>
    }
+
+type EvaledTask<'a,'b> = {
+    index : int
+    task : GeTask<'a,'b>
+    eval : Eval
+}
 
 ///<summary>
 /// Candidate 'system' (phi) with modules and control flow.<br />
