@@ -40,9 +40,9 @@ module Pareto =
             | Some x -> acc |> Set.add x 
             | _ -> acc)
 
-    let paretoPool grun = async {
+    let paretoPool runState = async {
         let byTask = 
-            grun.candidates 
+            runState.candidates 
             |> List.collect (fun c -> c.evals |> List.map (fun e -> c.id,(e.index,e.eval.score)))
             |> List.groupBy (fun (sid,(i,scr)) -> i)
             |> List.map (fun (i,xs) -> 
@@ -58,6 +58,6 @@ module Pareto =
         let toPrune = (Set.empty,frontier) ||> List.fold (prune rankedByTask)
         let frontierSet = frontier |> Seq.collect (fun (_,(_,xs)) -> xs) |> set
         let candidates = Set.difference frontierSet toPrune
-        return grun.candidates |> List.filter (fun c -> candidates.Contains c.id)
+        return runState.candidates |> List.filter (fun c -> candidates.Contains c.id)
     }
 

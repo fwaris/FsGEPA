@@ -7,13 +7,16 @@
     <None Include="scripts\download.fsx" />
     <None Include="scripts\packages.fsx" />
     <None Include="scripts\preview_data.fsx" />
-    <Compile Include="Constants.fs" />
+    <Compile Include="AsyncExts.fs" />
+    <Compile Include="Template.fs" />
     <Compile Include="FsGepa.Log.fs" />
     <Compile Include="Utils.fs" />
     <Compile Include="Prompts.fs" />
     <Compile Include="Core.fs" />
-    <Compile Include="Llm.fs" />
-    <Compile Include="Run.fs" />
+    <Compile Include="Meta.fs" />
+    <Compile Include="RuntimeTypes.fs" />
+    <Compile Include="Scoring.fs" />
+    <Compile Include="Telemetry.fs" />
     <Compile Include="Pareto.fs" />
     <Compile Include="Merge.fs" />
     <Compile Include="Reflective.fs" />
@@ -21,8 +24,9 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FSharp.Control.AsyncSeq" Version="3.2.1" />
+    <PackageReference Include="FSharp.Data" Version="6.6.0" />
     <PackageReference Include="FSharp.SystemTextJson" Version="1.4.36" />
-		<PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.9" />
     <PackageReference Include="Microsoft.SemanticKernel.Core" Version="1.65.0" />
   </ItemGroup>

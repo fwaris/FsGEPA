@@ -4,15 +4,21 @@
     <TargetFramework>net9.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Sample.fs" />
-    <Compile Include="GenAI.fs" />
+    
+    <Compile Include="Data.fs" />
+    <Compile Include="Tasks.fs" />
+    
     <Compile Include="Opt.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FsGepa\FsGepa.fsproj" />
+    <ProjectReference Include="..\FsgGenAI\FsgGenAI.fsproj" />
+    <ProjectReference Include="..\FsgTmApi\FsgTmApi.fsproj" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="FParsec" Version="1.1.1" />
     <PackageReference Include="FSharp.Data" Version="6.6.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.9" />
   </ItemGroup>
 </Project>

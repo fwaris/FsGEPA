@@ -7,5 +7,12 @@
     "FSharp.fsac.parallelReferenceResolution": true,
     "editor.inlayHints.enabled": "off",
     "FSharp.inlineValues.enabled": false,
-    "FSharp.fsac.gc.conserveMemory": 0
+    "FSharp.fsac.gc.conserveMemory": 0,
+    "cSpell.words": [
+        "Evaled",
+        "evals",
+        "Gepa",
+        "kwargs",
+        "varname"
+    ]
 }

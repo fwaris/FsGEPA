@@ -39,6 +39,45 @@ module Utils =
 
     let rng = new Random()  
     let randSelect (ls:_ list) = if ls.IsEmpty then failwith "empty list" else ls.[rng.Next(ls.Length)]
+
+    let extractTripleQuoted (inp:string) =
+        let lines =
+            seq {
+                use sr = new System.IO.StringReader(inp)
+                let mutable line = sr.ReadLine()
+                while line <> null do
+                    yield line
+                    line <- sr.ReadLine()
+            }
+            |> Seq.map(fun x -> x)
+            |> Seq.toList
+        let addSnip acc accSnip =
+            match accSnip with
+            |[] -> acc
+            | _ -> (List.rev accSnip)::acc
+        let isQuote (s:string) = s.StartsWith("```")
+        let rec start acc (xs:string list) =
+            match xs with
+            | []                   -> List.rev acc
+            | x::xs when isQuote x -> accQuoted acc [] xs
+            | x::xs                -> start acc xs
+        and accQuoted acc accSnip xs =
+            match xs with
+            | []                   -> List.rev (addSnip acc accSnip)
+            | x::xs when isQuote x -> start (addSnip acc accSnip) xs
+            | x::xs                -> accQuoted acc (x::accSnip) xs
+        start [] lines
+
+    let extractQuoted inp =
+        let outstr = 
+            extractTripleQuoted inp
+            |> Seq.collect id
+            |> fun xs -> String.Join("\n",xs)
+        if outstr.EndsWith("```") then 
+            outstr.Remove(outstr.Length-3)
+
+        else 
+            outstr
             
     let serOptionsFSharp = lazy(
         let o = JsonSerializerOptions(JsonSerializerDefaults.General)
