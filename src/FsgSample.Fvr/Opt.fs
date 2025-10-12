@@ -6,14 +6,38 @@ open FSharp.Control
 open FsGepa
 
 module Opt = 
-    let generate() =
-        {new IGenerate with 
-            member this.generate (model:Model) (systemMessage: string option) (messages:GenMessage list) (responseFormat: Type option): Async<GenerateResponse> = async{
-                let prompt = messages |> List.map _.content |> String.concat "\n"
-                let! resp = FsgTmApi.Api.generate (Environment.GetEnvironmentVariable("LER_API_KEY")) (Some model.id) systemMessage prompt responseFormat
-                return {output=resp.Text; thoughts = Some resp.Thoughts }
+
+
+    let backendOpenAI : FsgGenAI.Backend =     
+        {
+            endpoint =  {
+                API_KEY = Environment.GetEnvironmentVariable("OPENAI_API_KEY")
+                ENDPOINT = "https://api.openai.com/v1"
             }
+
+            backendType = FsgGenAI.BackendType.ChatCompletions
         }
+
+    let exampleBackendLlamaCpp : FsgGenAI.Backend =     
+        {
+            endpoint =  {
+                API_KEY = "cannot be empty"
+                ENDPOINT = "http://localhost:8080/v1"
+            }
+            backendType = FsgGenAI.BackendType.ChatCompletions
+        }
+
+    let exampleBackendLlamaCppGptOss : FsgGenAI.Backend =     
+        {
+            endpoint =  {
+                API_KEY = "cannot be empty"
+                ENDPOINT = "http://localhost:8080/v1"
+            }
+            backendType = FsgGenAI.BackendType.ChatCompletionsHarmony
+        }
+
+
+    let generate() = FsgGenAI.GenAI.createDefault backendOpenAI
 
      //results in {{$v}} to match semantic kernel template variable format
     let formatVar (v:string) =  $"{{{{${v}}}}}"

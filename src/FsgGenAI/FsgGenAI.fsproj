@@ -11,8 +11,12 @@
   <ItemGroup>
     <PackageReference Include="FSharp.Control.AsyncSeq" Version="3.2.1" />
     <PackageReference Include="FSharp.SystemTextJson" Version="1.4.36" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="9.9.1" />
 		<PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.9" />
     <PackageReference Include="Microsoft.SemanticKernel" Version="1.65.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\FsGepa\FsGepa.fsproj" />
   </ItemGroup>
 </Project>

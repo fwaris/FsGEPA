@@ -14,7 +14,6 @@
   <ItemGroup>
     <ProjectReference Include="..\FsGepa\FsGepa.fsproj" />
     <ProjectReference Include="..\FsgGenAI\FsgGenAI.fsproj" />
-    <ProjectReference Include="..\FsgTmApi\FsgTmApi.fsproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FParsec" Version="1.1.1" />

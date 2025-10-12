@@ -17,15 +17,14 @@ module Scoring =
                 let! o = sys.flow cfg sys.modules task.input
                 return i,task,o
             with ex -> 
-                if attempts < 0 then 
-                    Log.warn $"run task attempt failed {attempts - 1}"
+                if attempts > 0 then 
+                    Log.warn $"runTask failed, attempts remain: {attempts - 1}. Error: {ex.Message}"
                     do! Async.Sleep 3000
                     return! (runTask (attempts - 1) cfg sys (i,task))
                 else
                     Log.exn (ex,"runTask")
                     return raise ex
         }
-        
 
     let evalTask cfg (i,(t:GeTask<_,_>),flowResult) = 
         async {
@@ -36,7 +35,7 @@ module Scoring =
     let score cfg sys tasks = 
         tasks 
         |> AsyncSeq.ofSeq
-        |> AsyncSeq.mapAsyncParallelThrottled cfg.flow_parallelism (runTask 4 cfg sys)
+        |> AsyncSeq.mapAsyncParallelThrottled cfg.flow_parallelism (runTask 5 cfg sys)
         |> AsyncSeq.mapAsync (evalTask cfg)
 
     let averageScore cfg sys tasks = 

@@ -9,8 +9,6 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FsGepa", "src\FsGepa\FsGepa
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FsgSample.Fvr", "src\FsgSample.Fvr\FsgSample.Fvr.fsproj", "{B389FA5F-A3D8-4999-86D3-20D29E92AC72}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FsgTmApi", "src\FsgTmApi\FsgTmApi.fsproj", "{4FFE6BB5-C488-4BFB-9359-E7CD376F990D}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
