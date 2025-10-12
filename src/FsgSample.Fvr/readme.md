@@ -16,18 +16,39 @@ The sample expects the following two files (available from the above links) in t
 
 - feverous_dev_challenges.jsonl
 - feverous_wikiv1.db
-
-
+---
 > #### Tools and Services Required: 
 > - dotnet sdk 9.x
 > - Visual Studio Code
 > - Ionide F# VS Code Extension
 > - Access to a suitable LLM (setup described later)
-
+---
 
 Once the data, tooling and service requirements are met, the solution can be compiled with the ```dotnet build``` command, run from the project root folder. Then from the *src/FsgSample.Fer* folder use ```dotnet run``` to run the sample. 
 
-### LLM Setup
+### FsGepa Configuration and LLM Service Access
+FsGepa of course requires access to one or more LLMs, either through local services or through APIs.
+
+To invoke FsGepa, the caller supplies a [Config](../FsGepa/Core.fs) instance. The properties of this structure are well documented in code comments. However one key property is `generate` which requires an instance of the [IGenerate](../FsGepa/Core.fs) interface. 
+
+IGenerate is a highly abstracted interface for LLM response generation that FsGepa uses to make LLM calls - mostly for prompt updates.
+
+There is a default IGenerate implementation [FsgGenAI.GenAI module](../FsgGenAI/FsgGenAI.fs) included that covers the well-known service types (e.g. Chat Completions or Responses compatible APIs). Supply a custom implementation, if necessary.
+
+While an IGenerate instance is required for FsGepa, the same will usually also work for evaluation and scoring of the tasks (data) over which the prompts are optimized. 
+
+The optimization process for FsgSample.Fvr is explained next. Use this as the basis for your own optimization task.
+
+
+
+
+
+
+
+
+
+
+
 
 
 
