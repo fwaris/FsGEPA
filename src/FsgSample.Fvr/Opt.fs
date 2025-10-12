@@ -15,7 +15,7 @@ module Opt =
                 ENDPOINT = "https://api.openai.com/v1"
             }
 
-            backendType = FsgGenAI.BackendType.ChatCompletions
+            backendType = FsgGenAI.BackendType.Responses
         }
 
     let exampleBackendLlamaCpp : FsgGenAI.Backend =     
@@ -130,14 +130,24 @@ module Opt =
     |> AsyncSeq.iter(printfn "%A")
     |> Async.Start
 
+    let config_GptOss feedbackSize = 
+        let generate = FsgGenAI.GenAI.createDefault exampleBackendLlamaCppGptOss
+        {Config.CreateDefault generate feedbackSize {id="gpt-oss-20b"} with 
+            telemetry_channel = Some channel
+        }
+
+    let config_OpenAI feedbackSize = 
+        let generate = FsgGenAI.GenAI.createDefault backendOpenAI
+        {Config.CreateDefault generate feedbackSize {id="gpt-5-mini"} with 
+            telemetry_channel = Some channel
+        }
+
     let start() = async {
         let tPareto,tMB,tTest = Tasks.taskSets()
         let testSet = tTest |> Seq.indexed |> Seq.truncate 20 |> Seq.toList
         let tPareto = List.indexed tPareto
-        let cfg = 
-            {Config.CreateDefault (generate()) tMB.Length {id="gpt-oss-20b"} with 
-                telemetry_channel = Some channel
-            }
+        let cfg = config_GptOss tMB.Length
+        // cfg = config_OpenAI tMB.Length
         let sys = createInitialCandidate()     
         let initScore = FsGepa.Run.Scoring.averageScore cfg sys  testSet
         let! finalRunState =  Gepa.run cfg sys tPareto tMB 

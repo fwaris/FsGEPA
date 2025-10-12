@@ -22,7 +22,7 @@ The sample expects the following two files (available from the above links) in t
 > - dotnet sdk 9.x
 > - Visual Studio Code
 > - Ionide F# VS Code Extension
-> - Access to a sutiable LLM (setup described later)
+> - Access to a suitable LLM (setup described later)
 
 
 Once the data, tooling and service requirements are met, the solution can be compiled with the ```dotnet build``` command, run from the project root folder. Then from the *src/FsgSample.Fer* folder use ```dotnet run``` to run the sample. 

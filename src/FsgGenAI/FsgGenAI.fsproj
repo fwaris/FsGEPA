@@ -14,7 +14,6 @@
     <PackageReference Include="Microsoft.Extensions.AI" Version="9.9.1" />
 		<PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.9" />
-    <PackageReference Include="Microsoft.SemanticKernel" Version="1.65.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FsGepa\FsGepa.fsproj" />

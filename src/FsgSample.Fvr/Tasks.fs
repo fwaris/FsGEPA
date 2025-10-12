@@ -6,10 +6,12 @@ open FsGepa
 
 [<JsonConverter(typeof<JsonStringEnumConverter>)>]
 [<RequireQualifiedAccess>]
-type Answer =
+type AnswerType =
     | SUPPORTS = 0
     | REFUTES = 1
     | NOT_ENOUGH_INFO = 2
+
+type Answer = {answer:AnswerType}
 
 module Tasks =
     let MHR = "Multi-hop Reasoning"
@@ -18,10 +20,10 @@ module Tasks =
     let evalFn (cfg:Config) (input:FeverousResolved) (flowResult:FlowResult<Answer>): Async<Eval> = async{
         
         let score = 
-            match flowResult.output with 
-            | Answer.SUPPORTS when input.label === answers.[0] -> 1.0
-            | Answer.REFUTES when input.label === answers.[1] -> 1.0
-            | Answer.NOT_ENOUGH_INFO when input.label === answers.[2] -> 1.0
+            match flowResult.output.answer with 
+            | AnswerType.SUPPORTS when input.label === answers.[0] -> 1.0
+            | AnswerType.REFUTES when input.label === answers.[1] -> 1.0
+            | AnswerType.NOT_ENOUGH_INFO when input.label === answers.[2] -> 1.0
             | _ -> 0.0
         Log.info $"{input.id} score = {score}"
         return

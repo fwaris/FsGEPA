@@ -28,6 +28,6 @@
     <PackageReference Include="FSharp.SystemTextJson" Version="1.4.36" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.9" />
-    <PackageReference Include="Microsoft.SemanticKernel.Core" Version="1.65.0" />
+    <PackageReference Include="Microsoft.SemanticKernel" Version="1.66.0" />
   </ItemGroup>
 </Project>
