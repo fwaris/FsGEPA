@@ -5,5 +5,6 @@ docker run -d --name=gptoss20  `
   ghcr.io/ggml-org/llama.cpp:server-cuda  `
   --host 0.0.0.0 -ngl 99  `
   -m /models/gpt-oss-20b-mxfp4.gguf `
+  --ubatch-size 4096 `
   -c 0 -fa on --jinja --reasoning-format none
   

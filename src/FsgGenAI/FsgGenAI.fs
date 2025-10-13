@@ -4,7 +4,7 @@
 [<RequireQualifiedAccess>]
 type BackendType = 
 
-    ///Traditional chat completetions endpoint
+    ///Traditional chat completions endpoint
     | ChatCompletions 
 
     /// <summary>
@@ -14,7 +14,7 @@ type BackendType =
     /// </summary>
     | ChatCompletionsHarmony
 
-    ///Respones API endpoint that can return reasoning tokens
+    ///Response API endpoint that can return reasoning tokens
     | Responses
 
 type ApiEndpoint =
@@ -125,7 +125,7 @@ module ResponsesApi =
             return text,reasoning            
         with ex -> 
             if attempts > 0 then 
-                Log.warn $"callGenerateResponse failed, attemps remain {attempts - 1}. Error {ex.Message}"
+                Log.warn $"callGenerateResponse failed, attempts remain {attempts - 1}. Error {ex.Message}"
                 do! Async.Sleep 3000
                 return! callGenerateResponse (attempts - 1) respClient items opts
             else
@@ -133,13 +133,16 @@ module ResponsesApi =
                 return raise ex
     }
 
-    let internal generate attempts model (chat:ChatMessage seq) (outputFormat:JsonElement option) (endpoint:ApiEndpoint) = async {
+    let internal generate attempts model (chat:ChatMessage seq) (outputFormat:JsonElement option) (gopts:GenOpts option) (endpoint:ApiEndpoint) = async {
         let copts = OpenAI.OpenAIClientOptions(Endpoint = Uri endpoint.ENDPOINT)
         let client = OpenAIClient(ClientModel.ApiKeyCredential(endpoint.API_KEY), copts)
         let respClient = client.GetOpenAIResponseClient(model)
         let responseItems : Responses.ResponseItem seq = chat |> Seq.map toResponsesItem
         let opts = Responses.ResponseCreationOptions()
-        opts.MaxOutputTokenCount <- 5000
+        gopts
+        |> Option.iter(fun o -> 
+            o.temperature |> Option.iter (fun t -> opts.Temperature <- t)
+            o.max_tokens |> Option.iter (fun t -> opts.MaxOutputTokenCount <- t))
         opts.ReasoningOptions <- Responses.ResponseReasoningOptions(
            ReasoningEffortLevel=Responses.ResponseReasoningEffortLevel.High,
             ReasoningSummaryVerbosity=Responses.ResponseReasoningSummaryVerbosity.Detailed)
@@ -198,11 +201,14 @@ module CompletionsApi =
                 return raise ex
     }
 
-    let internal generate attempts model chat (outputFormat:JsonElement option) endpoint hasThought = async {
+    let internal generate attempts model chat (outputFormat:JsonElement option) (gopts:GenOpts option) endpoint hasThought = async {
         let copts = OpenAI.OpenAIClientOptions(Endpoint = Uri endpoint.ENDPOINT)
         let client = ChatClient(model,ClientModel.ApiKeyCredential(endpoint.API_KEY),copts) //instead of semantic kernel we can use the native chat completions client to pass json 
         let opts = new ChatCompletionOptions()
-        opts.MaxOutputTokenCount <- 5000
+        gopts
+        |> Option.iter(fun o -> 
+            o.temperature |> Option.iter (fun t -> opts.Temperature <- t)
+            o.max_tokens |> Option.iter (fun t -> opts.MaxOutputTokenCount <- t))
         match outputFormat with 
         | Some fmt ->
             let schemaJson = fmt.GetRawText()
@@ -219,7 +225,7 @@ module GenAI =
     open System
     open FsGepa
 
-    let internal generate (backend:Backend) (systemMessage:string option) (msgs:GenMessage list) (outputFormat:JsonElement option) (model:Model) = async {
+    let internal generate (backend:Backend) (systemMessage:string option) (msgs:GenMessage list) (outputFormat:JsonElement option) (opts:GenOpts option) (model:Model) = async {
         let chat = 
             seq {
                 match systemMessage with 
@@ -232,17 +238,17 @@ module GenAI =
             }
 
         match backend.backendType with 
-        | BackendType.Responses -> return! ResponsesApi.generate 5 model.id chat outputFormat backend.endpoint
-        | BackendType.ChatCompletions -> return! CompletionsApi.generate 5 model.id chat outputFormat backend.endpoint false
-        | BackendType.ChatCompletionsHarmony -> return! CompletionsApi.generate 5 model.id chat outputFormat backend.endpoint true
+        | BackendType.Responses -> return! ResponsesApi.generate 5 model.id chat outputFormat opts backend.endpoint
+        | BackendType.ChatCompletions -> return! CompletionsApi.generate 5 model.id chat outputFormat opts backend.endpoint false
+        | BackendType.ChatCompletionsHarmony -> return! CompletionsApi.generate 5 model.id chat outputFormat opts backend.endpoint true
         
     }
 
     let createDefault  backend =
         {new IGenerate with         
-            member this.generate(model: Model) (systemMessage: string option) (messages: GenMessage list) (responseFormat: Type option): Async<GenerateResponse> = async {
+            member this.generate(model: Model) (systemMessage: string option) (messages: GenMessage list) (responseFormat: Type option) (opts:GenOpts option): Async<GenerateResponse> = async {
                 let responseFormat = responseFormat |> Option.map Schema.generate
-                let! output,thoughts = generate backend systemMessage messages responseFormat model
+                let! output,thoughts = generate backend systemMessage messages responseFormat opts model
                 return {output=output; thoughts=checkEmpty thoughts}
             }                
         }

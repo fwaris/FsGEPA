@@ -93,14 +93,14 @@ module Opt =
     let step1 cfg (m1:GeModule) fr = async {
         let prompt = ["claim", fr.claim :> obj; "content", fr.document] |> Prompts.renderPrompt m1.prompt.text
         let model = m1.model |> Option.defaultValue cfg.default_model
-        let! resp = cfg.generate.generate model  None [{role="user"; content=prompt}] None 
+        let! resp = cfg.generate.generate model  None [{role="user"; content=prompt}] None (Some {GenOpts.Default with temperature=Some 0.2f})
         return {moduleId = m1.moduleId; inputPrompt=prompt; response=resp.output; reasoning=resp.thoughts}        
     }
 
     let step2 cfg (m2:GeModule) fr summary = async {
         let prompt = ["claim", fr.claim :> obj; "summary", summary] |> Prompts.renderPrompt m2.prompt.text
         let model = m2.model |> Option.defaultValue cfg.default_model
-        let! resp = cfg.generate.generate model  None [{role="user"; content=prompt}] (Some typeof<Answer>)
+        let! resp = cfg.generate.generate model  None [{role="user"; content=prompt}] (Some typeof<Answer>) (Some {GenOpts.Default with temperature=Some 0.2f})
         return {moduleId = m2.moduleId; inputPrompt=prompt; response=resp.output; reasoning=resp.thoughts}        
     }
 

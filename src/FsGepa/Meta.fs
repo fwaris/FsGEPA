@@ -4,15 +4,15 @@ open FsGepa
 module Meta = 
     let truncate len (s:string) = if s.Length < len then s else s.Substring(0,len) + "...[elided]"
 
-    let rec internal callGenerate attempts (generate:IGenerate) model systemMessage messages responseFormat = async {
+    let rec internal callGenerate attempts (generate:IGenerate) model systemMessage messages responseFormat opts = async {
         try 
-            let! resp = generate.generate model systemMessage messages responseFormat
+            let! resp = generate.generate model systemMessage messages responseFormat None
             return resp
         with ex -> 
             if attempts > 0 then 
                 Log.warn $"generate call failed. retry {attempts - 1}, error: {ex.Message}"
                 do! Async.Sleep 3000
-                return! callGenerate (attempts - 1) generate model systemMessage messages responseFormat
+                return! callGenerate (attempts - 1) generate model systemMessage messages responseFormat opts
             else 
                 Log.exn (ex,"callGenerate")
                 return raise ex
@@ -52,7 +52,7 @@ module Meta =
             | Some addInstr -> $"{metaPrompt}\n\n{addInstr}"
             | None -> metaPrompt
             
-        let! text = callGenerate 5 cfg.generate cfg.default_model None [{role="user"; content=metaPrompt}] None
+        let! text = callGenerate 5 cfg.generate cfg.default_model None [{role="user"; content=metaPrompt}] None None
         let instr = extractQuoted text.output |> Template.normalizePrompt
         
         return instr

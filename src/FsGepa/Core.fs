@@ -5,9 +5,17 @@ open System.Threading.Channels
 
 ///Interface to call an llm - implementation to be supplied by optimization invoker
 type IGenerate =
-    abstract member generate : model:Model -> systemMessage:string option -> messages:GenMessage list -> responseFormat:Type option -> Async<GenerateResponse>
+    abstract member generate : 
+                        model:Model 
+                        -> systemMessage:string option 
+                        -> messages:GenMessage list 
+                        -> responseFormat:Type option 
+                        -> options:GenOpts option
+                        -> Async<GenerateResponse>
 type GenerateResponse = {output:string; thoughts:string option}
 type GenMessage = {role:string; content:string}
+type GenOpts = {temperature:float32 option; max_tokens:int option}
+    with static member Default = {temperature=None; max_tokens=None}
 
 type Prompt = {
     text : string
