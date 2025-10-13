@@ -37,13 +37,13 @@ module Template =
             varNames
             |> List.fold (fun text varName ->
                 let pattern = Regex.Escape($"{{{{${varName}}}}}") |> Regex
-                pattern.Replace(text, $"[{varName}]")
+                pattern.Replace(text, $"[{varName.ToUpper()}]")
             ) normalized
         
         // Step 4: Add mapping at the end
         let mappings = 
             varNames
-            |> List.map (fun varName -> $"[{varName}] = {{{{${varName}}}}}")
+            |> List.map (fun varName -> $"[{varName.ToUpper()}]\n{{{{${varName}}}}}")
             |> String.concat "\n"
         
         if varNames.IsEmpty then

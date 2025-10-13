@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
@@ -8,9 +8,9 @@
     <None Include="readme.md" />
     
     <Compile Include="Data.fs" />
-    <Compile Include="Tasks.fs" />
+    <Compile Include="Tasks.fs" /><Compile Include="Opt.fs" />
     
-    <Compile Include="Opt.fs" />
+    
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup />

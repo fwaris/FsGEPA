@@ -78,6 +78,8 @@ module ResponsesApi =
     open System
     open FsGepa
 
+    let models_not_supporting_temp = set ["gpt-5"; "gpt-5-mini"]
+
     let internal toTextContentParts (xs:ChatMessageContentPart seq)  =
         xs
         |> Seq.map _.Text
@@ -141,7 +143,8 @@ module ResponsesApi =
         let opts = Responses.ResponseCreationOptions()
         gopts
         |> Option.iter(fun o -> 
-            o.temperature |> Option.iter (fun t -> opts.Temperature <- t)
+            if models_not_supporting_temp.Contains model |> not then             
+                o.temperature |> Option.iter (fun t -> opts.Temperature <- t) //not supported by some models
             o.max_tokens |> Option.iter (fun t -> opts.MaxOutputTokenCount <- t))
         opts.ReasoningOptions <- Responses.ResponseReasoningOptions(
            ReasoningEffortLevel=Responses.ResponseReasoningEffortLevel.High,
@@ -207,7 +210,8 @@ module CompletionsApi =
         let opts = new ChatCompletionOptions()
         gopts
         |> Option.iter(fun o -> 
-            o.temperature |> Option.iter (fun t -> opts.Temperature <- t)
+            if ResponsesApi.models_not_supporting_temp.Contains model |> not then 
+                o.temperature |> Option.iter (fun t -> opts.Temperature <- t)
             o.max_tokens |> Option.iter (fun t -> opts.MaxOutputTokenCount <- t))
         match outputFormat with 
         | Some fmt ->

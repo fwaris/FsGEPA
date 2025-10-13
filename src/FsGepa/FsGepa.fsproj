@@ -12,11 +12,11 @@
     <Compile Include="FsGepa.Log.fs" />
     <Compile Include="Utils.fs" />
     <Compile Include="Prompts.fs" />
-    <Compile Include="Core.fs" />
-    <Compile Include="Meta.fs" />
-    <Compile Include="RuntimeTypes.fs" />
+    <Compile Include="Core.fs" /><Compile Include="RuntimeTypes.fs" />
+    
+    <Compile Include="Telemetry.fs" /><Compile Include="Meta.fs" />
     <Compile Include="Scoring.fs" />
-    <Compile Include="Telemetry.fs" />
+    
     <Compile Include="Pareto.fs" />
     <Compile Include="Merge.fs" />
     <Compile Include="Reflective.fs" />

@@ -25,11 +25,12 @@ module Tasks =
             | AnswerType.REFUTES when input.label === answers.[1] -> 1.0
             | AnswerType.NOT_ENOUGH_INFO when input.label === answers.[2] -> 1.0
             | _ -> 0.0
-        Log.info $"{input.id} score = {score}"
+        Log.info $"{input.id} score = {score}; GT:{input.label}; Pred: {flowResult.output.answer}"
+        let feedback = if score = 1.0 then "Assistant answered correctly" else "Assistant should have answered: {input.label}"
         return
             {
                 score = score
-                feedback = Feedback ""
+                feedback = Feedback feedback
             }
     }
 
@@ -49,7 +50,7 @@ module Tasks =
 
     let taskSets () = 
         let fdb = FsgSample.Fvr.Data.loadFeverous FsgSample.Fvr.Data.FEVEROUS
-        let mhFdb = fdb |> Array.filter (fun r -> r.challenge = MHR) |> Array.take 100
+        let mhFdb = fdb |> Array.filter (fun r -> r.challenge = MHR) |> Array.take 200
         let sz = mhFdb.Length
         let szPareto = sz / 3 
         let szTest = sz / 5

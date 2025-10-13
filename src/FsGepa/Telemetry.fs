@@ -46,4 +46,8 @@ module Tlm =
         else 
             postAddReflective cfg score parentScore
 
+    let postGeneratedPrompt cfg prompt = 
+        cfg.telemetry_channel
+        |> Option.iter(fun c -> GeneratedPrompt prompt |> post c)
+
 

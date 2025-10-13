@@ -144,16 +144,18 @@ module Opt =
 
     let start() = async {
         let tPareto,tMB,tTest = Tasks.taskSets()
-        let testSet = tTest |> Seq.indexed |> Seq.truncate 20 |> Seq.toList
+        let testSet = tTest |> Seq.indexed |> Seq.truncate 100 |> Seq.toList
         let tPareto = List.indexed tPareto
         let cfg = config_GptOss tMB.Length
-        // cfg = config_OpenAI tMB.Length
+        //let cfg = config_OpenAI tMB.Length
         let sys = createInitialCandidate()     
+        Log.info "Establishing baseline score"
         let initScore = FsGepa.Run.Scoring.averageScore cfg sys  testSet
+        Log.info $"Baseline score: {initScore}"
         let! finalRunState =  Gepa.run cfg sys tPareto tMB 
         channel.Writer.TryComplete() |> ignore
         let sysStar = finalRunState.candidates |> List.maxBy _.avgScore.Value
         let optimizedScore = FsGepa.Run.Scoring.averageScore cfg sysStar.sys testSet
-        printfn $"Holdout Set: Initial score = %0.2f{initScore}; Optimized score = %0.2f{optimizedScore}"
+        printfn $"Holdout Set: Baseline score = %0.2f{initScore}; Optimized score = %0.2f{optimizedScore}"
         return finalRunState
     }

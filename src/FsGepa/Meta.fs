@@ -6,7 +6,7 @@ module Meta =
 
     let rec internal callGenerate attempts (generate:IGenerate) model systemMessage messages responseFormat opts = async {
         try 
-            let! resp = generate.generate model systemMessage messages responseFormat None
+            let! resp = generate.generate model systemMessage messages responseFormat (Some {GenOpts.Default with max_tokens=Some 4096})
             return resp
         with ex -> 
             if attempts > 0 then 
@@ -22,7 +22,7 @@ module Meta =
 
         let feedback = 
             evals
-            |> List.map (fun t ->
+            |> List.map (fun t ->                
                 let trace = t.flowResult.traces |> List.head
                 let thinking = 
                     trace.reasoning 
@@ -54,7 +54,7 @@ module Meta =
             
         let! text = callGenerate 5 cfg.generate cfg.default_model None [{role="user"; content=metaPrompt}] None None
         let instr = extractQuoted text.output |> Template.normalizePrompt
-        
+        FsGepa.Run.Tlm.postGeneratedPrompt cfg instr
         return instr
     }
 

@@ -50,7 +50,7 @@ I provided an assistant with the following [instructions] to perform a task for 
 ```
 {{{{${Vars.current_instruction}}}}}
 ```
-Note that [instructions] may contain template variables which are substituted with elements in the task input.
+Note that [instructions] may contain template variables which are substituted with actual content from the specific task.
 
 The following are examples of different task inputs provided to the assistant
 along with the assistant's response for each of them, and some feedback on how

@@ -76,6 +76,7 @@ type Telemetry =
     | Frontier of (string*float) list
     | AddReflective of {|score:float; parentScore:float|}
     | AddMerge of {|score:float; parentScore:float|}
+    | GeneratedPrompt of string
     
 ///Captures the raw LLM input, response and any reasoning/thoughts
 type ExecutionTrace = {moduleId:string; inputPrompt:string; response: string; reasoning:string option}
