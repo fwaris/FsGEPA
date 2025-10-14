@@ -1,0 +1,8 @@
+docker run -d --name=gptoss20  `
+  --network=host   `
+  -v /e/s/models:/models  `
+  --gpus all   `
+  ghcr.io/ggml-org/llama.cpp:server-cuda  `
+  --host 0.0.0.0 -ngl 99  `
+  -m /models/gpt-oss-20b-mxfp4.gguf `
+  -c 0 -fa on --jinja --reasoning-format none 

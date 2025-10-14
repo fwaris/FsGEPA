@@ -232,14 +232,14 @@ module GenAI =
     let internal generate (backend:Backend) (systemMessage:string option) (msgs:GenMessage list) (outputFormat:JsonElement option) (opts:GenOpts option) (model:Model) = async {
         let chat = 
             seq {
-                match systemMessage with 
-                | Some sm -> SystemChatMessage(sm) :> ChatMessage
-                | None -> for m in msgs do
-                            match m.role with 
-                            | "user" | "User" | "USER"  -> UserChatMessage(m.content) :> ChatMessage
-                            | "assistant" | "Assistant" | "ASSISTANT" -> AssistantChatMessage(m.content) :> ChatMessage
-                            | _ -> failwithf "Unknown role %s" m.role
+                match systemMessage with Some sm -> yield SystemChatMessage(sm) :> ChatMessage | _ -> ()
+                for m in msgs do 
+                    match m.role with 
+                    | "user" | "User" | "USER"  -> yield UserChatMessage(m.content)
+                    | "assistant" | "Assistant" | "ASSISTANT" -> yield AssistantChatMessage(m.content)
+                    | _ -> failwithf "Unknown role %s" m.role
             }
+            |> Seq.toList
 
         match backend.backendType with 
         | BackendType.Responses -> return! ResponsesApi.generate 5 model.id chat outputFormat opts backend.endpoint
