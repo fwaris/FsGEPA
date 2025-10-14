@@ -33,7 +33,7 @@ module Tasks =
             | AnswerType.NOT_ENOUGH_INFO when input.label === answers.[2] -> 1.0
             | _ -> 0.0
         Log.info $"{input.id} score = {score}; GT:{input.label}; Pred: {flowResult.output.answer}"
-        let feedback = if score = 1.0 then "Assistant answered correctly" else "Assistant should have answered: {input.label}"
+        let feedback = if score = 1.0 then "Assistant answered correctly" else $"Assistant should have answered: {input.label}"
         return
             {
                 score = score
