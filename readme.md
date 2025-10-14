@@ -25,7 +25,7 @@ Inspired by Genetic Algorithm (GA), GEPA uses forms of mutation and cross-over t
 ## Performance
 The performance of GEPA is already established. The paper is comprehensive with several ablation studies demonstrating GEPA superiority (as-of 10/2025) over other considered approaches.
 
-For the sample [included in this repo](/src/FsgSample.Fvr/readme.md)[FsgSample.Fvr](/src/FsgSample.Fvr/), FsGepa achieves ~90% accuracy on the hold out set, in contrast to the baseline accuracy of ~60% over the same (model=gpt-oss-20b). This is achieved with a budget of only 20 iterations. The sample selected is relatively simple. Its main purpose is to explain how to use FsGepa. Extensive setup (e.g. document indexes) is not required. Only two data files need be downloaded. 
+For the sample [included in this repo](/src/FsgSample.Fvr/readme.md), FsGepa achieves ~90% accuracy on the hold out set, in contrast to the baseline accuracy of ~60% over the same (model=gpt-oss-20b). This is achieved with a budget of only 20 iterations. The sample selected is relatively simple. Its main purpose is to explain how to use FsGepa. Extensive setup (e.g. document indexes) is not required. Only two data files need be downloaded. 
 
 ## Implementation Notes
 The FsGepa implementation aims to be faithful to the algorithms outlined in the paper but there are always differences between theory and implementation. Since there is no author-supplied implementation as of yet (10/'25), consider this as best-effort.
