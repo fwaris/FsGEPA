@@ -35,8 +35,10 @@ module Merge =
         |> List.exists (fun (_,(aPr,bPr,pPr)) -> (pPr = aPr && aPr <> bPr) || (pPr = bPr && aPr <> bPr))
 
     let isDesirable poolMap (a,b) pid = 
-        let p = poolMap |> Map.find pid
-        desirable(a,b,p)
+        poolMap 
+        |> Map.tryFind pid
+        |> Option.map (fun p -> desirable(a,b,p))
+        |> Option.defaultValue false
 
     let rec findMergePair prams poolMap attempts = 
         if attempts > 0 then 
