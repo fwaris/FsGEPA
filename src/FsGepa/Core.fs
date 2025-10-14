@@ -46,7 +46,7 @@ type Config = {
     ///The model that will be used to update the meta prompt
     default_model: Model
     ///Implementation of IGenerate interface - used to run meta prompt for module prompt updates
-    generate : IGenerate
+    generator : IGenerate
 
     ///<summary>
     /// Maximum allowed length for each task input prompt used in reflective update.<br />
@@ -66,7 +66,7 @@ type Config = {
                             max_attempts_find_pair = 10
                             telemetry_channel = None
                             default_model = default_model
-                            generate = generate
+                            generator = generate
                             max_sample_input_prompt_length = 2000
                         }
 
@@ -79,7 +79,7 @@ type Telemetry =
     | GeneratedPrompt of string
     
 ///Captures the raw LLM input, response and any reasoning/thoughts
-type ExecutionTrace = {moduleId:string; inputPrompt:string; response: string; reasoning:string option}
+type ExecutionTrace = {moduleId:string; taskInput:string; response: string; reasoning:string option}
 
 ///Captures any feedback from the evaluation of a flow input-output pair
 type Feedback = Feedback of string

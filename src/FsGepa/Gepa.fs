@@ -5,7 +5,8 @@ open FsGepa.Run
 module Gepa =
 
     let internal tryMerge (prams:ProposePrams<'input,'output>) = async {
-        if rng.NextDouble() > prams.cfg.reflect_merge_split  then 
+        let hasMultiple = prams.pool |> List.tryHead |> Option.map (fun s -> s.sys.modules.Count > 0 ) |> Option.defaultValue false
+        if hasMultiple && rng.NextDouble() > prams.cfg.reflect_merge_split  then 
             return! Merge.tryProposeCandidate prams
         else 
             return Merge (None,prams.comboSet)

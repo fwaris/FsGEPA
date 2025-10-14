@@ -4,6 +4,13 @@ open System.IO
 open System.Text.Json.Serialization
 open FsGepa
 
+type FeverousInput = {
+    id : int
+    claim : string
+    label : string
+    document : string
+}
+
 [<JsonConverter(typeof<JsonStringEnumConverter>)>]
 [<RequireQualifiedAccess>]
 type AnswerType =
@@ -17,7 +24,7 @@ module Tasks =
     let MHR = "Multi-hop Reasoning"
     let answers = [|"SUPPORTS"; "REFUTES"; "NOT ENOUGH INFO"|]
 
-    let evalFn (cfg:Config) (input:FeverousResolved) (flowResult:FlowResult<Answer>): Async<Eval> = async{
+    let evalFn (cfg:Config) (input:FeverousInput) (flowResult:FlowResult<Answer>): Async<Eval> = async{
         
         let score = 
             match flowResult.output.answer with 
@@ -50,7 +57,7 @@ module Tasks =
 
     let taskSets () = 
         let fdb = FsgSample.Fvr.Data.loadFeverous FsgSample.Fvr.Data.FEVEROUS
-        let mhFdb = fdb |> Array.filter (fun r -> r.challenge = MHR) |> Array.take 200
+        let mhFdb = fdb |> Array.filter (fun r -> r.challenge = MHR) |> Array.take 100
         let sz = mhFdb.Length
         let szPareto = sz / 3 
         let szTest = sz / 5

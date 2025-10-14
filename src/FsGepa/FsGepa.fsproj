@@ -8,7 +8,7 @@
     <None Include="scripts\packages.fsx" />
     <None Include="scripts\preview_data.fsx" />
     <Compile Include="AsyncExts.fs" />
-    <Compile Include="Template.fs" />
+    
     <Compile Include="FsGepa.Log.fs" />
     <Compile Include="Utils.fs" />
     <Compile Include="Prompts.fs" />

@@ -50,7 +50,6 @@ I provided an assistant with the following [instructions] to perform a task for 
 ```
 {{{{${Vars.current_instruction}}}}}
 ```
-Note that [instructions] may contain template variables which are substituted with actual content from the specific task.
 
 The following are examples of different task inputs provided to the assistant
 along with the assistant's response for each of them, and some feedback on how
@@ -58,8 +57,6 @@ the assistant's response could be better:
 ```
 {{{{${Vars.input_outputs_feedback}}}}}
 ```
-Your task is to write a new instruction for the assistant but **in a way that preserves the location and format of the template variables in the current instructions**, if any. 
-The template variable has the format ``{{$name}}``. Note double braces and '$' sign in the name.
 
 Read the inputs carefully and identify the input format and infer detailed task
 description about the task I wish to solve with the assistant.
@@ -68,5 +65,4 @@ niche and domain specific factual information about the task and include it in
 the instruction, as a lot of it may not be available to the assistant in the
 future. The assistant may have utilized a generalizable strategy to solve the
 task, if so, include that in the instruction as well.
-Provide the new instructions within ``` blocks. Be as brief as possible.
 """

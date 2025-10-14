@@ -87,14 +87,6 @@ module WRef =
     let tryParse s = match run p_all s with Success (r,_,_) -> WRef {|original=s; t=r|} |> Some | _ -> None
 
 
-type FeverousResolved = {
-    id : int
-    claim : string
-    label : string
-    document : string
-}
-
-
 module Data = 
     let FEVEROUS = home @@ "Downloads" @@ "feverous_dev_challenges.jsonl"
     let FEVEROUS_DB = home @@ "Downloads" @@ "feverous_wikiv1.db"

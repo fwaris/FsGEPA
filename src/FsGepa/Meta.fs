@@ -2,6 +2,9 @@
 open FsGepa
 
 module Meta = 
+    open System.Text.Json
+    type MetaResponse = {instructions:string}
+
     let truncate len (s:string) = if s.Length < len then s else s.Substring(0,len) + "...[elided]"
 
     let rec internal callGenerate attempts (generate:IGenerate) model systemMessage messages responseFormat opts = async {
@@ -31,11 +34,11 @@ module Meta =
                 let feedback = 
                     t.eval.feedback.text() 
                     |> checkEmpty
-                    |> Option.map (fun x -> "##EVAL FEEDBACK: {X}") 
+                    |> Option.map (fun x -> $"##EVAL FEEDBACK: {x}") 
                     |> Option.defaultValue ""
                 $"""
 # -- EXAMPLE START --
-## TASK INPUT: {trace.inputPrompt |> truncate cfg.max_sample_input_prompt_length}
+## TASK INPUT: {trace.taskInput |> truncate cfg.max_sample_input_prompt_length}
 ## ASSISTANT RESPONSE : {trace.response}
 {feedback}
 {thinking}
@@ -52,10 +55,15 @@ module Meta =
             | Some addInstr -> $"{metaPrompt}\n\n{addInstr}"
             | None -> metaPrompt
             
-        let! text = callGenerate 5 cfg.generate cfg.default_model None [{role="user"; content=metaPrompt}] None None
-        let instr = extractQuoted text.output |> Template.normalizePrompt
-        FsGepa.Run.Tlm.postGeneratedPrompt cfg instr
-        return instr
+        let! text = callGenerate 5 cfg.generator cfg.default_model None [{role="user"; content=metaPrompt}] (Some typeof<MetaResponse>) None
+        let resp = 
+            try 
+                let r = JsonSerializer.Deserialize<MetaResponse>(text.output)
+                r.instructions
+            with ex ->
+                text.output
+        FsGepa.Run.Tlm.postGeneratedPrompt cfg resp
+        return resp
     }
 
     let updatePromptOverride<'a,'b> cfg modulePrompt (mMeta:ModuleMetaPrompt) (evals:EvaledTask<'a,'b> list) =  async {

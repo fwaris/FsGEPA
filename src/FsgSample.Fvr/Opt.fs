@@ -7,7 +7,6 @@ open FsGepa
 
 module Opt = 
 
-
     let backendOpenAI : FsgGenAI.Backend =     
         {
             endpoint =  {
@@ -36,72 +35,49 @@ module Opt =
             backendType = FsgGenAI.BackendType.ChatCompletionsHarmony
         }
 
-
-    let generate() = FsgGenAI.GenAI.createDefault backendOpenAI
-
-     //results in {{$v}} to match semantic kernel template variable format
-    let formatVar (v:string) =  $"{{{{${v}}}}}"
-
-    let validatePrompt expectedNames (prompt:string) = async{
-        let templateVars = Template.extractVarNames prompt
-        let varCounts = templateVars |> List.countBy id
-        let varSet = varCounts |> List.map fst |> set
-        let presentVars = Set.intersect varSet expectedNames
-        if presentVars.Count = expectedNames.Count && varCounts |> List.forall ((fun (_,c) -> c = 1)) then 
-            return None
-        else
-            let missing = Set.difference expectedNames varSet |> Seq.map formatVar |> String.concat ","
-            let highCounts = varCounts |> List.filter (fun (_,c) -> c > 1) |> List.map (fst>>formatVar) |> String.concat ","
-            let missingFeedback = if isEmpty missing then "" else $"# Ensure following template variables are present: {missing}"
-            let highCountFeedback = if isEmpty highCounts then "" else $"# Ensure there is only ONE instance for each the following template variables: {highCounts}"
-            let feedback = $"{missingFeedback}{highCountFeedback}"
-            return Some feedback
-        }
-
-    let m1Vars = set ["claim";"content"]
-    let m1VarsStr = m1Vars |> Seq.map formatVar |> String.concat "," 
-    let m2Vars = set ["claim";"summary"]
-    let m2VarsStr = m2Vars |> Seq.map formatVar |> String.concat "," 
-
-    let m1Meta = 
-        {
-            metaPrompt = Prompts.metaPrompt + $"\n Ensure the following template variables are present: {m1VarsStr}"
-            validate = validatePrompt m1Vars
-        }
-
-    let m2Meta = 
-        {
-            metaPrompt = Prompts.metaPrompt + $"\n Ensure the following template variables are present: {m2VarsStr}"
-            validate = validatePrompt m2Vars
-        }
-
     let m1 = 
         { GeModule.Default with
-            prompt = {text="given the [CLAIM]\n{{$claim}}. Extract and summarize the supporting facts from the [CONTENT]\n{{$content}}"}
+            prompt = {text="Given the fields `claim` and `supporting_facts`, produce the field `summary`."}
             moduleId = "summarize"
-            metaPrompt = Some m1Meta
         }
 
     let m2 = 
         { GeModule.Default with
-            prompt = {text="given the [CLAIM]\n{{$claim}}. And the [SUMMARY]\n{{$summary}}. Determine if the facts support the claim or not"}
+            prompt = {text="Given the fields `claim` and `summary`, produce the field `answer`."}
             moduleId = "predict"            
-            metaPrompt = Some m2Meta
-            outputSchema = Tasks.answers |> String.concat "|" |> Some
+            outputSchema = Tasks.answers |> String.concat "|" |> Some //not currently used
         }
 
-    let step1 cfg (m1:GeModule) fr = async {
-        let prompt = ["claim", fr.claim :> obj; "content", fr.document] |> Prompts.renderPrompt m1.prompt.text
-        let model = m1.model |> Option.defaultValue cfg.default_model
-        let! resp = cfg.generate.generate model  None [{role="user"; content=prompt}] None (Some {GenOpts.Default with temperature=Some 0.2f})
-        return {moduleId = m1.moduleId; inputPrompt=prompt; response=resp.output; reasoning=resp.thoughts}        
+    //intermediate types
+    type Claim_SupportingFacts = {claim:string; supporting_facts:string}
+    type Summary = {summary:string}
+    type Claim_Summary = {claim:string; summary:string}
+
+    let step1 cfg (geModule:GeModule) (fr:FeverousInput) = async {
+        let model = geModule.model |> Option.defaultValue cfg.default_model
+        let taskInput = JsonSerializer.Serialize({claim=fr.claim; supporting_facts = fr.document}, Utils.openAIResponseSerOpts)
+        let! resp = 
+            cfg.generator.generate 
+                model 
+                (Some geModule.prompt.text) 
+                [{role="user"; content=taskInput}] 
+                (Some typeof<Summary>)
+                (Some {GenOpts.Default with temperature=Some 0.2f})
+        let summary = try JsonSerializer.Deserialize<Summary>(resp.output, Utils.openAIResponseSerOpts).summary with _ -> resp.output
+        return {moduleId = geModule.moduleId; taskInput=taskInput; response=summary; reasoning=resp.thoughts}        
     }
 
-    let step2 cfg (m2:GeModule) fr summary = async {
-        let prompt = ["claim", fr.claim :> obj; "summary", summary] |> Prompts.renderPrompt m2.prompt.text
-        let model = m2.model |> Option.defaultValue cfg.default_model
-        let! resp = cfg.generate.generate model  None [{role="user"; content=prompt}] (Some typeof<Answer>) (Some {GenOpts.Default with temperature=Some 0.2f})
-        return {moduleId = m2.moduleId; inputPrompt=prompt; response=resp.output; reasoning=resp.thoughts}        
+    let step2 cfg (geModule:GeModule) (fr:FeverousInput) summary = async {
+        let model = geModule.model |> Option.defaultValue cfg.default_model
+        let taskInput = JsonSerializer.Serialize({claim = fr.claim; summary = summary}, Utils.openAIResponseSerOpts)
+        let! resp = 
+            cfg.generator.generate 
+                model 
+                (Some geModule.prompt.text) 
+                [{role="user"; content=taskInput}] 
+                (Some typeof<Answer>) 
+                (Some {GenOpts.Default with temperature=Some 0.2f})
+        return {moduleId = geModule.moduleId; taskInput=taskInput; response=resp.output; reasoning=resp.thoughts}        
     }
 
     let flow cfg (modules:Map<string,GeModule>) input : Async<FlowResult<Answer>> =  async {
@@ -134,6 +110,7 @@ module Opt =
         let generate = FsgGenAI.GenAI.createDefault exampleBackendLlamaCppGptOss
         {Config.CreateDefault generate feedbackSize {id="gpt-oss-20b"} with 
             telemetry_channel = Some channel
+            mini_batch_size = 20
         }
 
     let config_OpenAI feedbackSize = 
@@ -143,16 +120,16 @@ module Opt =
         }
 
     let start() = async {
-        let tPareto,tMB,tTest = Tasks.taskSets()
+        let tPareto,tFeedback,tTest = Tasks.taskSets()
         let testSet = tTest |> Seq.indexed |> Seq.truncate 100 |> Seq.toList
         let tPareto = List.indexed tPareto
-        let cfg = config_GptOss tMB.Length
-        //let cfg = config_OpenAI tMB.Length
+        let cfg = config_GptOss tFeedback.Length
+        //let cfg = config_OpenAI tFeedback.Length
         let sys = createInitialCandidate()     
         Log.info "Establishing baseline score"
         let initScore = FsGepa.Run.Scoring.averageScore cfg sys  testSet
         Log.info $"Baseline score: {initScore}"
-        let! finalRunState =  Gepa.run cfg sys tPareto tMB 
+        let! finalRunState =  Gepa.run cfg sys tPareto tFeedback 
         channel.Writer.TryComplete() |> ignore
         let sysStar = finalRunState.candidates |> List.maxBy _.avgScore.Value
         let optimizedScore = FsGepa.Run.Scoring.averageScore cfg sysStar.sys testSet

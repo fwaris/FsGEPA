@@ -96,7 +96,8 @@ module Merge =
         let combo = set [a.id; b.id; p.id]
         let combos = Set.add combo combos
         let proposed = merge (a,b,p)
-        combos, proposed |> Option.map(fun c -> {candidate=c; parentId=p.id; parentMBScore = p.avgScore.Value})
+        let maxParentScore = max (max a.avgScore.Value b.avgScore.Value) p.avgScore.Value
+        combos, proposed |> Option.map(fun c -> {candidate=c; parentId=p.id; parentMBScore = maxParentScore})
         
     let tryProposeFromPair prams (a,b,ancestors) =
         let refSet = ref prams.comboSet
