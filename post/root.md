@@ -130,5 +130,5 @@ The core GEPA algorithm implementation comprises approximately 1000 lines of F# 
 
 A core benefit of functional languages is the availability of immutable, functional data structures (e.g. lists, maps [dictionaries], sets, etc.) that significantly reduce the code required to perform complex transformations. 
 
-To use FsGepa its best to start with the provided sample and adapt that for your own optimization setup. Start with the [readme.md of the Feverous sample](https://github.com/fwaris/FsGEPA/blob/main/src/FsgSample.Fvr/readme.md).
+To use FsGepa, its best to start with the provided sample and adapt that for your own optimization setup. Start with the [readme.md of the Feverous sample](https://github.com/fwaris/FsGEPA/blob/main/src/FsgSample.Fvr/readme.md).
 
