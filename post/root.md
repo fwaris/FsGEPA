@@ -79,46 +79,56 @@ A birds-eye perspective of GEPA is presented below. See the paper for the precis
 
 - The flow consumes some input and produces an output and optionally ancillary information such as reasoning traces.
 
-- The input along with its associated meta information, including the ground-truth label (if any), is called a *task* in GEPA. Required also is a function that can *evaluate* the output of the flow for any task and provide *feedback*.
+- The input along with its associated meta information, including the ground-truth label (if any), is called a *Task* in GEPA. Required also is a function that can *evaluate* the output of the flow for any *Task* and provide a score [0..1] and optionally some *feedback*.
 
-- Minimally, an instance of the GEPA algorithm accepts an initial *System*; a dataset of *tasks*; and the evaluation function to produce a *System* wih optimized prompts.
+- Minimally, an instance of the GEPA algorithm accepts an initial *System*; a dataset of *tasks*; the *evaluation* function; and a *budget* of iterations to produce a *System* wih optimized prompts.
 
 ### GEPA Algorithm
+GEPA stands for 'Genetic Pareto'. Its inspired by the venerable [Genetic Algorithm](https://optimization.cbe.cornell.edu/index.php?title=Genetic_algorithm) (GA). As in GA, GEPA maintains a population of candidate *Systems* that are evolved with (domain-specific) mutation and crossover operations. GEPA starts with a single root *System* and grows that into a population of candidate *Systems* over successive iterations. However unlike GA where the best candidate is always selected, GEPA draws 'parent(s)' for the next generation from a set of candidate *Systems* that are on the pareto frontier. An innovation that maintains healthy diversity, reducing the chances of being trapped into local optima.
 
+The pareto frontier, and the GEPA versions of mutation and crossover are explained next. Note that the explanations are high level. See the paper for the authoritative definitions.
 
+---
 
+> #### Pareto Frontier
+> From the datasets of *Tasks* given to GEPA, it sets aside a pool of 'pareto' *Tasks*. The candidate *Systems* are scored on this pareto list. The pareto frontier is the list of *Systems* that are *not dominated*. For example, if a single *System* scores the highest on each of the pareto *Tasks*, it would be the only one in the frontier. However, if any other candidate *System* does better on even one *Task* then that also would be in the pareto set.
 
+> #### Mutation or *Reflective Prompt Update*
+> In each iteration where the mutation strategy is selected, GEPA selects a single 'parent' *System* from the pareto set and updates a single *Module* prompt in it. Briefly, the process as follows:
+> - Sample a mini-batch of *Tasks* from the input dataset (excluding pareto)
+> - Run the parent *flow* on this set and *evaluate* the results. This will provide the outputs, traces, scores and feedbacks for each of the mini-batch *Tasks*.
+> - Pack all of this information - including the existing selected *Module* prompt - into a *meta prompt* and invoke an LLM to generate a new prompt and consequently a new *Module* instance.
+> - Create a new 'child' *System* that inherits everything from the parent except for the selected *Module*.
 
+> #### Crossover or *System-Aware Merge*
+> In an iteration where the crossover strategy is chosen, GEPA selects two parents from the pareto set and a common ancestor. GEPA create a new child that intermixes the *Modules* from the parents and the ancestor in a specific way (see the paper for details).
 
-A F# implementation of GEPA (Genetic Evolutionary Prompt Augmentation) for optimizing compound AI systems.
+---
 
-- [GEPA: Reflective Prompt Evolution Can Outperform Reinforcement Learning](https://arxiv.org/abs/2507.19457).
+The child candidate *System* is added to the population *only* if its performance is better than its parents' over the aforementioned mini-batch, otherwise its discarded.
 
-(Start with the included [sample](/src/FsgSample.Fvr/readme.md) to understand how to use FsGepa)
+A graphical representation of the GEPA algorithm is given in Fig 1.
 
-## Overview
-Automated prompt tuning can become expensive due to the iterative nature of the optimization process requiring the consumption of a large number of tokens. As compared to other automated prompt tuning algorithms (e.g. [MIPROv2 found in DSPY](https://arxiv.org/pdf/2510.04618)), GEPA is shown to be more cost effective - i.e., achieves better results for the same number of trials (or roll outs).
+![GepaFlow](/post/imgs/gepa_alg.jpeg)
+* Fig 1: GEPA Algorithm (source: GEPA paper)
 
-GEPA is meant to jointly optimize a set of prompts contained in a **multi-step flow** (referred to as Compound AI System or just *System* heretofore).
+### GEPA Results
+GEPA study is comprehensive, comparing GEPA performance over several datasets against multiple competing approaches - notably [MIPROv2](https://arxiv.org/pdf/2510.04618) (the algorithm underpinning [DSPy](https://dispy.ai)) and [Reinforcement Learning with GRPO](https://www.datacamp.com/blog/what-is-grpo-group-relative-policy-optimization) (RL). Following are the notable takeaways:
 
-Inspired by Genetic Algorithm (GA), GEPA uses forms of mutation and cross-over to 'evolve' new *Systems* from a population of candidate *Systems*. See the paper for details but briefly:
-- In mutation or *Reflective Update*, existing prompts are evolved by 'reflecting' on the existing prompt along with the associated inputs, outputs and feedbacks from a batch of sample results - *including 'think' or reasoning output*, if any.
-- In cross-over or *System-Aware Merge*, a new candidate *System* is proposed by taking a pair of existing candidates and their common parent *Systems* and merging their prompts together in a specific way.
+- GEPA significantly outperforms RL in both accuracy and cost-efficiency, raising questions about whether fine-tuning offers real advantages over automated prompt tuning. The fact that even MIPROv2 surpasses RL reinforces this observation.
 
-### Key Points:
-- *Pareto Frontier*: To avoid local optima traps, GEPA considers a set of candidate *Systems* that are on the pareto frontier (which respect to a fixed set of 'pareto' input tasks) when selecting candidates for update operations. This quality-diversity strategy provides better exploration-exploitation balance over always selecting the best candidate, as is done in traditional GA.
+- When comparing automated prompt tuning methods, GEPA achieves superior results over MIPROv2 on all four evaluated datasets. By incorporating outputs, traces, and feedback into the meta prompt, GEPA's reflection-based approach enables the LLM to generate more effective instructions through deeper analysis of past performance.
 
-- *Reflection*: The GEPA paper shows that reflection-tuned prompts generalize better (in addition to performing better overall) than the few-shot, exemplar based approach used by MIPROv2. The authors attribute this shift to improved instruction-following capability of newer models.
+- Beyond superior overall performance, reflection-tuned prompts also demonstrate stronger generalization compared to MIPROv2's few-shot, exemplar-based strategy. The authors credit this advantage to modern models' enhanced ability to follow complex instructions.
 
-- *Frugality*: GEPA uses a small ('mini batch') sample of tasks (that are randomly selected from a larger set) to evaluate new candidate proposals. Only if the proposed candidate performs better than the donor parent, is it considered for evaluation on a the larger set. 
+## FsGepa
+FsGepa is an implementation of GEPA for the dotnet platform, written in the F# language. 
 
-## Performance
-The performance of GEPA is already established. The paper is comprehensive with several ablation studies demonstrating GEPA superiority (as-of 10/2025) over other considered approaches.
+F# is a concise, functional-first programming language that defaults to immutability. Despite being strongly typed, F# features powerful type inference that provides the brevity of a scripting language while maintaining full type safety. 
 
-For the sample [included in this repo](/src/FsgSample.Fvr/readme.md), FsGepa achieves ~90% accuracy on the hold out set, in contrast to the baseline accuracy of ~60% over the same (model=gpt-oss-20b). This is achieved with a budget of only 20 iterations. The sample selected is relatively simple. Its main purpose is to explain how to use FsGepa. Extensive setup (e.g. document indexes) is not required. Only two data files need be downloaded. 
+The core GEPA algorithm implementation comprises approximately 1000 lines of F# code, developed over the course of a week.
 
-## Implementation Notes
-The FsGepa implementation aims to be faithful to the algorithms outlined in the paper but there are always differences between theory and implementation. Since there is no author-supplied implementation as of yet (10/'25), consider this as best-effort.
+A core benefit of functional languages is the availability of immutable, functional data structures (e.g. lists, maps [dictionaries], sets, etc.) that significantly reduce the code required to perform complex transformations. 
 
-## Other Notes
-Optimization requires access to GPU-based LLM models and may be costly due to the iterative nature of the optimization process (i.e. repeated invocations of the LLM model APIs). Substantial development was done with locally running GPU models 
+To use FsGepa its best to start with the provided sample and adapt that for your own optimization setup. Start with the [readme.md of the Feverous sample](https://github.com/fwaris/FsGEPA/blob/main/src/FsgSample.Fvr/readme.md).
+
