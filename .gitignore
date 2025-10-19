@@ -367,3 +367,4 @@ FodyWeavers.xsd
 .DS_Store
 src/.DS_Store
 src/FsGepa/.DS_Store
+/src/FsgSample.Fvr/out.txt

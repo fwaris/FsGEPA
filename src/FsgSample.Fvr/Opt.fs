@@ -129,10 +129,12 @@ module Opt =
         Log.info "Establishing baseline score"
         let initScore = FsGepa.Run.Scoring.averageScore cfg sys  testSet
         Log.info $"Baseline score: {initScore}"
+        let ts0 = DateTime.Now
         let! finalRunState =  Gepa.run cfg sys tPareto tFeedback 
+        let ts1 = DateTime.Now
         channel.Writer.TryComplete() |> ignore
         let sysStar = finalRunState.candidates |> List.maxBy _.avgScore.Value
         let optimizedScore = FsGepa.Run.Scoring.averageScore cfg sysStar.sys testSet
-        printfn $"Holdout Set: Baseline score = %0.2f{initScore}; Optimized score = %0.2f{optimizedScore}"
+        printfn $"Holdout Set: Baseline score = %0.2f{initScore}; Optimized score = %0.2f{optimizedScore}; Elapsed: {ts1-ts0}"
         return finalRunState
     }
