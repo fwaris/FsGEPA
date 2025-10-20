@@ -6,6 +6,8 @@ A F# implementation of GEPA (Genetic Evolutionary Prompt Augmentation) for optim
 
 (Start with the included [sample](/src/FsgSample.Fvr/readme.md) to understand how to use FsGepa)
 
+[Write up](https://www.linkedin.com/posts/activity-7384785782890356736-uViM?utm_source=share&utm_medium=member_desktop&rcm=ACoAAAAbaagBCG-0LlGBjghxmo7KKzbEXRHmiZ0)
+
 ## Overview
 Automated prompt tuning can become expensive due to the iterative nature of the optimization process requiring the consumption of a large number of tokens. As compared to other automated prompt tuning algorithms (e.g. [MIPROv2 found in DSPY](https://arxiv.org/pdf/2510.04618)), GEPA is shown to be more cost effective - i.e., achieves better results for the same number of trials (or roll outs).
 
