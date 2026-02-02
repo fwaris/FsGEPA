@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36518.9
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FsgGenAI", "src\FsgGenAI\FsgGenAI.fsproj", "{7EE706F5-6158-4714-8BE6-22FDCE612DE0}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FsGepa.GenAI", "src\FsGepa.GenAI\FsGepa.GenAI.fsproj", "{7EE706F5-6158-4714-8BE6-22FDCE612DE0}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FsGepa", "src\FsGepa\FsGepa.fsproj", "{E77ACDA5-7A75-447B-D38F-6E0AD1C3D038}"
 EndProject

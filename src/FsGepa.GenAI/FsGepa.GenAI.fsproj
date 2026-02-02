@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+    <PropertyGroup>
+        <PackageId>FsGepa.GenAI</PackageId>
+        <Description>Supporting library for FsGepa. Contains IGenerate implementations for OpenAI API backends </Description>
+        <Authors>Faisal Waris</Authors>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageTags>AI</PackageTags>
+        <RepositoryUrl>https://github.com/fwaris/FsGepa</RepositoryUrl>
+    </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="StreamParser.fs" /><Compile Include="FsGepa.GenAI.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FSharp.Control.AsyncSeq" />
+    <PackageReference Include="FSharp.SystemTextJson" />
+    <PackageReference Include="Microsoft.Extensions.AI" />
+		<PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\FsGepa\FsGepa.fsproj" />
+  </ItemGroup>
+</Project>

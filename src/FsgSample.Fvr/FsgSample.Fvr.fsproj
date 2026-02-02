@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
     
@@ -16,11 +16,11 @@
   <ItemGroup />
   <ItemGroup>
     <ProjectReference Include="..\FsGepa\FsGepa.fsproj" />
-    <ProjectReference Include="..\FsgGenAI\FsgGenAI.fsproj" />
+    <ProjectReference Include="..\FsGepa.GenAI\FsGepa.GenAI.fsproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="FParsec" Version="1.1.1" />
-    <PackageReference Include="FSharp.Data" Version="6.6.0" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.9" />
+    <PackageReference Include="FParsec" />
+    <PackageReference Include="FSharp.Data" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
   </ItemGroup>
 </Project>

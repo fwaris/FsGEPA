@@ -34,6 +34,7 @@ module Schema =
     open System.Text.Json
     open System.Text.Json.Serialization
 
+    ///generate a schema from the given JSON 
     let generate(t:Type): JsonElement =
         let createOptions =
             AIJsonSchemaCreateOptions(
