@@ -1,4 +1,4 @@
-﻿namespace FsgGenAI
+﻿namespace FsGepa.GenAI
 
 open Microsoft.Extensions.AI
 open Harmony.Microsoft.Extensions.AI
@@ -231,7 +231,7 @@ module CompletionsApi =
             return! callGenerate attempts disposableClient chat opts
     }
 
-module GenAI =
+module Api =
     open Microsoft.Extensions.AI
     open FSharp.Control
     open System.Text.Json

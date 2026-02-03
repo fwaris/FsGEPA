@@ -7,32 +7,32 @@ open FsGepa
 
 module Opt = 
 
-    let backendOpenAI : FsgGenAI.Backend =     
+    let backendOpenAI : FsGepa.GenAI.Backend =     
         {
             endpoint =  {
                 API_KEY = Environment.GetEnvironmentVariable("OPENAI_API_KEY")
                 ENDPOINT = "https://api.openai.com/v1"
             }
 
-            backendType = FsgGenAI.BackendType.Responses
+            backendType = FsGepa.GenAI.BackendType.Responses
         }
 
-    let exampleBackendLlamaCpp : FsgGenAI.Backend =     
+    let exampleBackendLlamaCpp : FsGepa.GenAI.Backend =     
         {
             endpoint =  {
                 API_KEY = "cannot be empty"
                 ENDPOINT = "http://localhost:8081/v1"
             }
-            backendType = FsgGenAI.BackendType.ChatCompletions
+            backendType = FsGepa.GenAI.BackendType.ChatCompletions
         }
 
-    let exampleBackendLlamaCppGptOss : FsgGenAI.Backend =     
+    let exampleBackendLlamaCppGptOss : FsGepa.GenAI.Backend =     
         {
             endpoint =  {
                 API_KEY = "cannot be empty"
                 ENDPOINT = "http://localhost:8081/v1"
             }
-            backendType = FsgGenAI.BackendType.ChatCompletionsHarmony
+            backendType = FsGepa.GenAI.BackendType.ChatCompletionsHarmony
         }
 
     let m1 = 
@@ -107,14 +107,14 @@ module Opt =
     |> Async.Start
 
     let config_GptOss feedbackSize = 
-        let generate = FsgGenAI.GenAI.createDefault exampleBackendLlamaCppGptOss
+        let generate = FsGepa.GenAI.Api.createDefault exampleBackendLlamaCppGptOss
         {Config.CreateDefault generate feedbackSize {id="gpt-oss-20b"} with 
             telemetry_channel = Some channel
             mini_batch_size = 20
         }
 
     let config_OpenAI feedbackSize = 
-        let generate = FsgGenAI.GenAI.createDefault backendOpenAI
+        let generate = FsGepa.GenAI.Api.createDefault backendOpenAI
         {Config.CreateDefault generate feedbackSize {id="gpt-5-mini"} with 
             telemetry_channel = Some channel
             
