@@ -125,7 +125,7 @@ module Opt =
         let testSet = tTest |> Seq.indexed |> Seq.truncate 100 |> Seq.toList
         let tPareto = List.indexed tPareto
         let cfg = config_GptOss tFeedback.Length       
-        //let cfg = {config_OpenAI tFeedback.Length with default_model = {id="gpt-5.1"}}
+        //let cfg = {config_OpenAI tFeedback.Length with default_model = {id="gpt-5-mini"}} // Note: Only gpt-5-mini seems to provide reasoning traces back
         let sys = createInitialCandidate()     
         Log.info "Establishing baseline score"
         let initScore = FsGepa.Run.Scoring.averageScore cfg sys  testSet

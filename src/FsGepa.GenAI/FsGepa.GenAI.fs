@@ -249,28 +249,27 @@ module GenAI =
     let private createChatMessage (role:ChatRole) (content:string) =
         ChatMessage(role, content)
 
-    let internal generate (backend:Backend) (systemMessage:string option) (msgs:GenMessage list) (outputFormat:JsonElement option) (opts:GenOpts option) (model:Model) = async {
-        let chat = 
-            [
-                match systemMessage with
-                | Some sm -> yield createChatMessage ChatRole.System sm
-                | None -> ()
-                for m in msgs do
-                    let role = normalizeRole m.role
-                    yield createChatMessage role m.content
-            ]
-
+    let generate (backend:Backend) (systemMessage:string option) (chat:ChatMessage list) (responseFormat:Type option) (opts:GenOpts option) (model:Model) = async {
+        let outputFormat = responseFormat |> Option.map Schema.generate
         match backend.backendType with 
         | BackendType.Responses -> return! ResponsesApi.generate 5 model.id chat outputFormat opts backend.endpoint
         | BackendType.ChatCompletions -> return! CompletionsApi.generate 5 model.id chat outputFormat opts backend.endpoint false
         | BackendType.ChatCompletionsHarmony -> return! CompletionsApi.generate 5 model.id chat outputFormat opts backend.endpoint true        
     }
-
+        
     let createDefault  backend =
         {new IGenerate with         
             member this.generate(model: Model) (systemMessage: string option) (messages: GenMessage list) (responseFormat: Type option) (opts:GenOpts option): Async<GenerateResponse> = async {
-                let responseFormat = responseFormat |> Option.map Schema.generate
-                let! output,thoughts = generate backend systemMessage messages responseFormat opts model
+                let chat = 
+                    [
+                        match systemMessage with
+                        | Some sm -> yield createChatMessage ChatRole.System sm
+                        | None -> ()
+                        for m in messages do
+                            let role = normalizeRole m.role
+                            yield createChatMessage role m.content
+                    ]
+                let! output,thoughts = generate backend systemMessage chat responseFormat opts model
                 return {output=output; thoughts=checkEmpty thoughts}
             }                
         }
