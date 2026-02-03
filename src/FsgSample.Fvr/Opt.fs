@@ -21,7 +21,7 @@ module Opt =
         {
             endpoint =  {
                 API_KEY = "cannot be empty"
-                ENDPOINT = "http://localhost:8080/v1"
+                ENDPOINT = "http://localhost:8081/v1"
             }
             backendType = FsgGenAI.BackendType.ChatCompletions
         }
@@ -30,7 +30,7 @@ module Opt =
         {
             endpoint =  {
                 API_KEY = "cannot be empty"
-                ENDPOINT = "http://localhost:8080/v1"
+                ENDPOINT = "http://localhost:8081/v1"
             }
             backendType = FsgGenAI.BackendType.ChatCompletionsHarmony
         }
@@ -62,7 +62,7 @@ module Opt =
                 (Some geModule.prompt.text) 
                 [{role="user"; content=taskInput}] 
                 (Some typeof<Summary>)
-                (Some {GenOpts.Default with temperature=Some 0.2f})
+                None //(Some {GenOpts.Default with temperature=Some 0.2f})
         let summary = try JsonSerializer.Deserialize<Summary>(resp.output, Utils.openAIResponseSerOpts).summary with _ -> resp.output
         return {moduleId = geModule.moduleId; taskInput=taskInput; response=summary; reasoning=resp.thoughts}        
     }
@@ -76,7 +76,7 @@ module Opt =
                 (Some geModule.prompt.text) 
                 [{role="user"; content=taskInput}] 
                 (Some typeof<Answer>) 
-                (Some {GenOpts.Default with temperature=Some 0.2f})
+                None //(Some {GenOpts.Default with temperature=Some 0.2f})
         return {moduleId = geModule.moduleId; taskInput=taskInput; response=resp.output; reasoning=resp.thoughts}        
     }
 
@@ -117,14 +117,15 @@ module Opt =
         let generate = FsgGenAI.GenAI.createDefault backendOpenAI
         {Config.CreateDefault generate feedbackSize {id="gpt-5-mini"} with 
             telemetry_channel = Some channel
+            
         }
 
     let start() = async {
         let tPareto,tFeedback,tTest = Tasks.taskSets()
         let testSet = tTest |> Seq.indexed |> Seq.truncate 100 |> Seq.toList
         let tPareto = List.indexed tPareto
-        let cfg = config_GptOss tFeedback.Length
-        //let cfg = config_OpenAI tFeedback.Length
+        let cfg = config_GptOss tFeedback.Length       
+        //let cfg = {config_OpenAI tFeedback.Length with default_model = {id="gpt-5.1"}}
         let sys = createInitialCandidate()     
         Log.info "Establishing baseline score"
         let initScore = FsGepa.Run.Scoring.averageScore cfg sys  testSet

@@ -15,16 +15,20 @@
     </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="StreamParser.fs" /><Compile Include="FsGepa.GenAI.fs" />
+    <Compile Include="FsGepa.GenAI.fs" />
   </ItemGroup>
+    
   <ItemGroup>
     <PackageReference Include="FSharp.Control.AsyncSeq" />
     <PackageReference Include="FSharp.SystemTextJson" />
     <PackageReference Include="Microsoft.Extensions.AI" />
-		<PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" />
   </ItemGroup>
+    
   <ItemGroup>
     <ProjectReference Include="..\FsGepa\FsGepa.fsproj" />
+    <ProjectReference Include="..\Harmony.Microsoft.Extensions.AI\Harmony.Microsoft.Extensions.AI.fsproj" />
   </ItemGroup>
 </Project>

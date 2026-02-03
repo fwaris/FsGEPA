@@ -1,4 +1,8 @@
 ﻿namespace FsgGenAI
+
+open Microsoft.Extensions.AI
+open Harmony.Microsoft.Extensions.AI
+
 #nowarn "57"
 
 [<RequireQualifiedAccess>]
@@ -73,180 +77,193 @@ module Schema =
 
 module ResponsesApi = 
     open OpenAI
-    open OpenAI.Chat
+    open OpenAI.Responses
+    open Microsoft.Extensions.AI
     open FSharp.Control
     open System.Text.Json
     open System
+    open System.Collections.Generic
     open FsGepa
 
-    let models_not_supporting_temp = set ["gpt-5"; "gpt-5-mini"]
+    let private prefix_models_not_supporting_temp =  ["gpt-5"]
+  
+    let supportsTemp (model:string) =
+        prefix_models_not_supporting_temp
+        |> List.exists (fun p -> model.StartsWith(p,StringComparison.CurrentCultureIgnoreCase)) |> not
 
-    let internal toTextContentParts (xs:ChatMessageContentPart seq)  =
-        xs
-        |> Seq.map _.Text
-        |> Seq.map Responses.ResponseContentPart.CreateInputTextPart 
+    let private textContents (message:ChatMessage) =
+        message.Contents
+        |> Seq.choose (function :? TextContent as tc -> Some tc.Text | _ -> None)
 
-    let internal toTextContentPartsOut (xs:ChatMessageContentPart seq)  =
-        xs
-        |> Seq.map _.Text
-        |> Seq.map (fun p -> Responses.ResponseContentPart.CreateOutputTextPart(p,[]))
-    
-    let internal toResponsesItem (m:ChatMessage) : Responses.ResponseItem=
-        match m with 
-        | :? SystemChatMessage as c -> 
-            c.Content
-            |> toTextContentParts
+    let private toResponseInputParts (message:ChatMessage) =
+        message
+        |> textContents
+        |> Seq.map Responses.ResponseContentPart.CreateInputTextPart
+
+    let private toResponseOutputParts (message:ChatMessage) =
+        message
+        |> textContents
+        |> Seq.map (fun text -> Responses.ResponseContentPart.CreateOutputTextPart(text, []))
+
+    let internal toResponsesItem (message:ChatMessage) : Responses.ResponseItem =
+        match message.Role with
+        | role when role = ChatRole.System ->
+            message
+            |> toResponseInputParts
             |> Responses.ResponseItem.CreateSystemMessageItem
             :> _
-        | :? UserChatMessage as c -> 
-            c.Content
-            |> toTextContentParts
-            |> Responses.ResponseItem.CreateUserMessageItem
-            :> _
-        | :? AssistantChatMessage as c -> 
-            c.Content
-            |> toTextContentPartsOut
+        | role when role = ChatRole.Assistant ->
+            message
+            |> toResponseOutputParts
             |> Responses.ResponseItem.CreateAssistantMessageItem
             :> _
-        | x -> failwith $"message type not handled {x}"
+        | role when role = ChatRole.User ->
+            message
+            |> toResponseInputParts
+            |> Responses.ResponseItem.CreateUserMessageItem
+            :> _
+        | r -> failwithf "Unsupported chat role %A for Responses API" r
 
-    let toTextOutput(ri:Responses.ResponseItem) =
-        match ri with 
+    let toTextOutput (item:Responses.ResponseItem) =
+        match item with
         | :? Responses.MessageResponseItem as m -> m.Content |> Seq.map _.Text
-        | _ -> []
+        | _ -> Seq.empty
 
-    let toReasoningOutput(ri:Responses.ResponseItem) =
-        match ri with 
-        | :? Responses.ReasoningResponseItem as m -> m.SummaryParts |> Seq.map (function :? Responses.ReasoningSummaryTextPart as t -> t.Text | _ -> "")
-        | _ -> []
+    let toReasoningOutput (item:Responses.ResponseItem) =
+        match item with
+        | :? Responses.ReasoningResponseItem as m ->
+            m.SummaryParts
+            |> Seq.choose (function :? Responses.ReasoningSummaryTextPart as t -> Some t.Text | _ -> None)
+        | _ -> Seq.empty
 
-    let rec internal callGenerateResponse attempts (respClient:Responses.OpenAIResponseClient) (items:Responses.ResponseItem seq) (opts:Responses.ResponseCreationOptions) = async {
+    let rec internal callGenerateResponse attempts (respClient:Responses.ResponsesClient) (opts:Responses.CreateResponseOptions) = async {
         try 
-            let! resp = respClient.CreateResponseAsync(items, options=opts) |> Async.AwaitTask
+            let! resp = respClient.CreateResponseAsync(opts) |> Async.AwaitTask
             let text = resp.Value.OutputItems |> Seq.collect toTextOutput |> String.concat ""
             let reasoning = resp.Value.OutputItems |> Seq.collect toReasoningOutput |> String.concat ""
-            return text,reasoning            
+            return text, reasoning            
         with ex -> 
             if attempts > 0 then 
                 Log.warn $"callGenerateResponse failed, attempts remain {attempts - 1}. Error {ex.Message}"
                 do! Async.Sleep 3000
-                return! callGenerateResponse (attempts - 1) respClient items opts
+                return! callGenerateResponse (attempts - 1) respClient opts
             else
                 Log.exn (ex,"callGenerateResponse")
                 return raise ex
     }
 
-    let internal generate attempts model (chat:ChatMessage seq) (outputFormat:JsonElement option) (gopts:GenOpts option) (endpoint:ApiEndpoint) = async {
+    let internal generate attempts model (chat:ChatMessage list) (outputFormat:JsonElement option) (gopts:GenOpts option) (endpoint:ApiEndpoint) = async {
         let copts = OpenAI.OpenAIClientOptions(Endpoint = Uri endpoint.ENDPOINT)
-        let client = OpenAIClient(ClientModel.ApiKeyCredential(endpoint.API_KEY), copts)
-        let respClient = client.GetOpenAIResponseClient(model)
-        let responseItems : Responses.ResponseItem seq = chat |> Seq.map toResponsesItem
-        let opts = Responses.ResponseCreationOptions()
+        let respClient = Responses.ResponsesClient(model, ClientModel.ApiKeyCredential(endpoint.API_KEY), copts)
+        let responseItems = chat |> Seq.map toResponsesItem
+        let opts = Responses.CreateResponseOptions()
+        responseItems |> Seq.iter opts.InputItems.Add
         gopts
         |> Option.iter(fun o -> 
-            if models_not_supporting_temp.Contains model |> not then             
+            if supportsTemp model |> not then             
                 o.temperature |> Option.iter (fun t -> opts.Temperature <- t) //not supported by some models
             o.max_tokens |> Option.iter (fun t -> opts.MaxOutputTokenCount <- t))
         opts.ReasoningOptions <- Responses.ResponseReasoningOptions(
-           ReasoningEffortLevel=Responses.ResponseReasoningEffortLevel.High,
-            ReasoningSummaryVerbosity=Responses.ResponseReasoningSummaryVerbosity.Detailed)
+           ReasoningEffortLevel = Responses.ResponseReasoningEffortLevel.High,
+            ReasoningSummaryVerbosity = Responses.ResponseReasoningSummaryVerbosity.Detailed)
         match outputFormat with 
         | Some fmt -> 
             let schemaJson = fmt.GetRawText()
             let schemaData = BinaryData(schemaJson)
-            let txOpts = Responses.ResponseTextOptions()
-            txOpts.TextFormat <- Responses.ResponseTextFormat.CreateJsonSchemaFormat("schema", schemaData, jsonSchemaIsStrict=true)
-            opts.TextOptions <- txOpts
+            let textOpts = Responses.ResponseTextOptions()
+            textOpts.TextFormat <- Responses.ResponseTextFormat.CreateJsonSchemaFormat("schema", schemaData, jsonSchemaIsStrict = true)
+            opts.TextOptions <- textOpts
         | None -> ()
-        return! callGenerateResponse 5 respClient responseItems opts
+        return! callGenerateResponse 5 respClient opts
     }
 
 module CompletionsApi = 
     open OpenAI
     open OpenAI.Chat
+    open Microsoft.Extensions.AI
     open FSharp.Control
     open System.Text.Json
     open System
     open FsGepa
 
-    let rec internal callGenerate attempts hasThought chat opts (client:ChatClient) = async {
-        try 
-            let thoughts = ref ""
-            let output = 
-                client.CompleteChatStreamingAsync(chat,opts)
-                |> AsyncSeq.ofAsyncEnum
-                //|> AsyncSeq.map(fun x -> printfn $"""c:{x.ContentUpdate.Count},{if x.ContentUpdate.Count > 0 then string x.ContentUpdate.[0].Text else ""}"""; x)
-                |> AsyncSeq.filter(fun x -> x.ContentUpdate.Count > 0)
-                |> AsyncSeq.map(fun x->x.ContentUpdate[0].Text)
-    //          |> AsyncSeq.bufferByCountAndTime 1 C.CHAT_RESPONSE_TIMEOUT
-    //          |> AsyncSeq.collect(fun xs -> if xs.Length > 0 then AsyncSeq.ofSeq xs else failwith C.TIMEOUT_MSG)
-                |> AsyncSeq.bufferByCountAndTime 10 1000
-                |> AsyncSeq.filter(fun xs -> xs.Length > 0)
-                |> AsyncSeq.map(String.concat "")
-                |> fun xs -> 
-                    if hasThought then  
-                        //----- stream parse think tokens  -----
-                        xs
-                        |> AsyncSeq.scan StreamParser.updateState (StreamParser.harmonyExp thoughts,(StreamParser.State.Empty,[]))
-                        |> AsyncSeq.collect (fun (_,(_,os)) -> os |> List.rev |> AsyncSeq.ofSeq)
-                        //-----------------------------
-                    else
-                        xs 
-                |> AsyncSeq.toBlockingSeq
-                |> String.concat ""
-            return (output,thoughts.Value)
+    let private collectContent<'T when 'T :> AIContent> (selector:'T -> string) (messages:seq<ChatMessage>) =
+        messages
+        |> Seq.collect (fun message ->
+            message.Contents
+            |> Seq.choose (function :? 'T as content -> Some (selector content) | _ -> None))
+        |> String.concat ""
+
+    let rec internal callGenerate attempts (client:IChatClient) (chat:ChatMessage list) (opts:ChatOptions) = async {        
+        try
+            let! response = client.GetResponseAsync(chat, opts) |> Async.AwaitTask
+            let output = collectContent<TextContent> (fun c -> c.Text) response.Messages
+            let reasoning = collectContent<TextReasoningContent> (fun c -> c.Text) response.Messages
+            return output, reasoning
         with ex -> 
             if attempts > 0 then    
                 Log.warn $"llm call failed attempts left {attempts - 1}: Error: {ex.Message}"
                 do! Async.Sleep 3000
-                return! callGenerate (attempts - 1) hasThought chat opts client
+                return! callGenerate (attempts - 1) client chat opts
             else 
                 Log.exn(ex,"callGenerate")
                 return raise ex
     }
 
-    let internal generate attempts model chat (outputFormat:JsonElement option) (gopts:GenOpts option) endpoint hasThought = async {
+    let internal generate attempts model chat (outputFormat:JsonElement option) (gopts:GenOpts option) endpoint useHarmony = async {
         let copts = OpenAI.OpenAIClientOptions(Endpoint = Uri endpoint.ENDPOINT)
-        let client = ChatClient(model,ClientModel.ApiKeyCredential(endpoint.API_KEY),copts) //instead of semantic kernel we can use the native chat completions client to pass json 
-        let opts = new ChatCompletionOptions()
+        let chatClient = ChatClient(model, ClientModel.ApiKeyCredential(endpoint.API_KEY), copts)
+        let baseClient = OpenAIClientExtensions.AsIChatClient(chatClient)
+        let opts = ChatOptions()
+        opts.ModelId <- model
         gopts
         |> Option.iter(fun o -> 
-            if ResponsesApi.models_not_supporting_temp.Contains model |> not then 
-                o.temperature |> Option.iter (fun t -> opts.Temperature <- t)
-            o.max_tokens |> Option.iter (fun t -> opts.MaxOutputTokenCount <- t))
+            if ResponsesApi.supportsTemp model |> not then 
+                o.temperature |> Option.iter (fun t -> opts.Temperature <- Nullable t)
+            o.max_tokens |> Option.iter (fun t -> opts.MaxOutputTokens <- Nullable t))
         match outputFormat with 
-        | Some fmt ->
-            let schemaJson = fmt.GetRawText()
-            let schemaData = BinaryData(schemaJson)
-            opts.ResponseFormat <- ChatResponseFormat.CreateJsonSchemaFormat("schema", schemaData, jsonSchemaIsStrict=true)
+        | Some fmt -> opts.ResponseFormat <- ChatResponseFormat.ForJsonSchema(fmt)
         | None -> ()
-        return! callGenerate attempts hasThought chat opts client
+        if useHarmony then
+            use harmonyClient = new HarmonyChatClient(baseClient)
+            return! callGenerate attempts (harmonyClient :> IChatClient) chat opts
+        else
+            use disposableClient = baseClient
+            return! callGenerate attempts disposableClient chat opts
     }
 
 module GenAI =
-    open OpenAI.Chat
+    open Microsoft.Extensions.AI
     open FSharp.Control
     open System.Text.Json
     open System
     open FsGepa
 
+    let private normalizeRole (role:string) =
+        match role with
+        | null -> failwith "Role cannot be null"
+        | r when r.Equals("user", StringComparison.OrdinalIgnoreCase) -> ChatRole.User
+        | r when r.Equals("assistant", StringComparison.OrdinalIgnoreCase) -> ChatRole.Assistant
+        | r when r.Equals("system", StringComparison.OrdinalIgnoreCase) -> ChatRole.System
+        | _ -> failwithf "Unknown role %s" role
+
+    let private createChatMessage (role:ChatRole) (content:string) =
+        ChatMessage(role, content)
+
     let internal generate (backend:Backend) (systemMessage:string option) (msgs:GenMessage list) (outputFormat:JsonElement option) (opts:GenOpts option) (model:Model) = async {
         let chat = 
-            seq {
-                match systemMessage with Some sm -> yield SystemChatMessage(sm) :> ChatMessage | _ -> ()
-                for m in msgs do 
-                    match m.role with 
-                    | "user" | "User" | "USER"  -> yield UserChatMessage(m.content)
-                    | "assistant" | "Assistant" | "ASSISTANT" -> yield AssistantChatMessage(m.content)
-                    | _ -> failwithf "Unknown role %s" m.role
-            }
-            |> Seq.toList
+            [
+                match systemMessage with
+                | Some sm -> yield createChatMessage ChatRole.System sm
+                | None -> ()
+                for m in msgs do
+                    let role = normalizeRole m.role
+                    yield createChatMessage role m.content
+            ]
 
         match backend.backendType with 
         | BackendType.Responses -> return! ResponsesApi.generate 5 model.id chat outputFormat opts backend.endpoint
         | BackendType.ChatCompletions -> return! CompletionsApi.generate 5 model.id chat outputFormat opts backend.endpoint false
-        | BackendType.ChatCompletionsHarmony -> return! CompletionsApi.generate 5 model.id chat outputFormat opts backend.endpoint true
-        
+        | BackendType.ChatCompletionsHarmony -> return! CompletionsApi.generate 5 model.id chat outputFormat opts backend.endpoint true        
     }
 
     let createDefault  backend =

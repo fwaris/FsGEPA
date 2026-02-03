@@ -9,6 +9,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FsGepa", "src\FsGepa\FsGepa
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FsgSample.Fvr", "src\FsgSample.Fvr\FsgSample.Fvr.fsproj", "{B389FA5F-A3D8-4999-86D3-20D29E92AC72}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Harmony.Microsoft.Extensions.AI", "src\Harmony.Microsoft.Extensions.AI\Harmony.Microsoft.Extensions.AI.fsproj", "{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -67,6 +69,18 @@ Global
 		{4FFE6BB5-C488-4BFB-9359-E7CD376F990D}.Release|x64.Build.0 = Release|Any CPU
 		{4FFE6BB5-C488-4BFB-9359-E7CD376F990D}.Release|x86.ActiveCfg = Release|Any CPU
 		{4FFE6BB5-C488-4BFB-9359-E7CD376F990D}.Release|x86.Build.0 = Release|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Debug|x64.Build.0 = Debug|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Debug|x86.Build.0 = Debug|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Release|x64.ActiveCfg = Release|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Release|x64.Build.0 = Release|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Release|x86.ActiveCfg = Release|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
