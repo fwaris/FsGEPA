@@ -32,49 +32,6 @@ type Backend = {
     backendType : BackendType
 }
 
-module Schema = 
-    open System
-    open Microsoft.Extensions.AI
-    open System.Text.Json
-    open System.Text.Json.Serialization
-
-    ///generate a schema from the given JSON 
-    let generate(t:Type): JsonElement =
-        let createOptions =
-            AIJsonSchemaCreateOptions(
-                TransformOptions = AIJsonSchemaTransformOptions(DisallowAdditionalProperties = true))
-
-        let serializerOptions = JsonSerializerOptions(AIJsonUtilities.DefaultOptions)
-
-        let fsharpConverterTypeName = "System.Text.Json.Serialization.Converters.FSharpTypeConverterFactory, System.Text.Json"
-        let fsharpConverterType = Type.GetType(fsharpConverterTypeName)
-
-        match fsharpConverterType with
-        | null -> ()
-        | converterType ->
-            let alreadyAdded =
-                serializerOptions.Converters
-                |> Seq.exists (fun c -> converterType.IsAssignableFrom(c.GetType()))
-
-            if not alreadyAdded then
-                let instance = Activator.CreateInstance(converterType)
-                match instance with
-                | :? JsonConverter as converter -> serializerOptions.Converters.Add(converter)
-                | _ -> ()
-
-        let hasStringEnumConverter =
-            serializerOptions.Converters
-            |> Seq.exists (fun c -> c :? JsonStringEnumConverter)
-
-        if not hasStringEnumConverter then
-            serializerOptions.Converters.Add(JsonStringEnumConverter())
-
-        AIJsonUtilities.CreateJsonSchema(
-            t,
-            description = t.Name,
-            serializerOptions = serializerOptions,
-            inferenceOptions = createOptions)
-
 module ResponsesApi = 
     open OpenAI
     open OpenAI.Responses
@@ -250,7 +207,7 @@ module Api =
         ChatMessage(role, content)
 
     let generate (backend:Backend) (systemMessage:string option) (chat:ChatMessage list) (responseFormat:Type option) (opts:GenOpts option) (model:Model) = async {
-        let outputFormat = responseFormat |> Option.map Schema.generate
+        let outputFormat = responseFormat |> Option.map SchemaUtils.toSchema
         match backend.backendType with 
         | BackendType.Responses -> return! ResponsesApi.generate 5 model.id chat outputFormat opts backend.endpoint
         | BackendType.ChatCompletions -> return! CompletionsApi.generate 5 model.id chat outputFormat opts backend.endpoint false
