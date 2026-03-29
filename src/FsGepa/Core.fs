@@ -25,6 +25,78 @@ type Model = {
     id : string
 }
 
+///Optimization loop implementation.
+type OptimizerMode =
+    | GepaMode
+    | VistaMode
+
+///Configuration options for the VISTA optimizer mode.
+type VistaConfig = {
+    ///Maximum number of root-cause hypotheses to request per reflective step.
+    hypothesis_count : int
+    ///Maximum number of hypotheses to rewrite and validate on the minibatch.
+    hypotheses_to_validate : int
+    ///Probability of exploring a lower-priority hypothesis during selection.
+    epsilon_greedy : float
+    ///After this many rejected proposals, VISTA may restart from the seed/frontier.
+    random_restart_stagnation : int option
+    ///Probability of taking a restart once the stagnation threshold is met.
+    random_restart_probability : float
+    ///When restarting, probability of branching from the original seed candidate.
+    restart_from_seed_probability : float
+    ///Optional override model used for diagnosis and prompt rewriting.
+    reflector_model : Model option
+    ///Optional model overrides used during minibatch validation.
+    validation_models : Model list
+    ///When true, VISTA may still use GEPA merge proposals.
+    use_merge : bool
+}
+    with static member Default = {
+                            hypothesis_count = 4
+                            hypotheses_to_validate = 3
+                            epsilon_greedy = 0.20
+                            random_restart_stagnation = Some 4
+                            random_restart_probability = 0.35
+                            restart_from_seed_probability = 0.60
+                            reflector_model = None
+                            validation_models = []
+                            use_merge = false
+                        }
+
+///Labeled root-cause hypothesis produced during VISTA diagnosis.
+type Hypothesis = {
+    id : string
+    label : string
+    summary : string
+    evidence : string list
+    priority : int
+    confidence : float
+}
+
+///Describes how a candidate was produced.
+type CandidateOrigin =
+    | Seed
+    | ReflectiveUpdate of moduleId:string
+    | MergeUpdate
+    | VistaUpdate of moduleId:string * hypothesisId:string * label:string * restarted:bool
+
+///Interpretable trace item for a single optimization step.
+type OptimizationTraceEntry = {
+    step : int
+    action : string
+    parentId : string option
+    moduleId : string option
+    hypothesisId : string option
+    hypothesisLabel : string option
+    hypothesisSummary : string option
+    evidence : string list
+    parentScore : float option
+    candidateScore : float option
+    accepted : bool option
+    restartReason : string option
+    notes : string option
+}
+
 ///Optimization parameters 
 type Config = {
     ///Number of runs ('roll outs')
@@ -43,6 +115,10 @@ type Config = {
     max_attempts_find_pair : int
     ///If set, Telemetry messages will be posted to the channel when the optimization is running
     telemetry_channel : Channel<Telemetry> option
+    ///Optimizer implementation to run.
+    optimizer_mode : OptimizerMode
+    ///Structured diagnosis and restart controls used by VISTA mode.
+    vista : VistaConfig
     ///The model that will be used to update the meta prompt
     default_model: Model
     ///Implementation of IGenerate interface - used to run meta prompt for module prompt updates
@@ -65,6 +141,8 @@ type Config = {
                             max_attempts_find_merge_parent = 10
                             max_attempts_find_pair = 10
                             telemetry_channel = None
+                            optimizer_mode = GepaMode
+                            vista = VistaConfig.Default
                             default_model = default_model
                             generator = generate
                             max_sample_input_prompt_length = 2000
@@ -77,6 +155,11 @@ type Telemetry =
     | AddReflective of {|score:float; parentScore:float|}
     | AddMerge of {|score:float; parentScore:float|}
     | GeneratedPrompt of string
+    | HypothesesGenerated of {|parentId:string; moduleId:string; hypotheses:(string * string) list|}
+    | HypothesisValidated of {|parentId:string; moduleId:string; hypothesisId:string; label:string; score:float; parentScore:float|}
+    | RestartTriggered of {|sourceId:string; reason:string|}
+    | CandidateAccepted of OptimizationTraceEntry
+    | CandidateRejected of OptimizationTraceEntry
     
 ///Captures the raw LLM input, response and any reasoning/thoughts
 type ExecutionTrace = {moduleId:string; taskInput:string; response: string; reasoning:string option}

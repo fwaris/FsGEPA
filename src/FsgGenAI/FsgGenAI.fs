@@ -170,8 +170,7 @@ module CompletionsApi =
 
     let rec internal callGenerate attempts hasThought chat opts (client:ChatClient) = async {
         try 
-            let thoughts = ref ""
-            let output = 
+            let rawOutput = 
                 client.CompleteChatStreamingAsync(chat,opts)
                 |> AsyncSeq.ofAsyncEnum
                 //|> AsyncSeq.map(fun x -> printfn $"""c:{x.ContentUpdate.Count},{if x.ContentUpdate.Count > 0 then string x.ContentUpdate.[0].Text else ""}"""; x)
@@ -182,18 +181,13 @@ module CompletionsApi =
                 |> AsyncSeq.bufferByCountAndTime 10 1000
                 |> AsyncSeq.filter(fun xs -> xs.Length > 0)
                 |> AsyncSeq.map(String.concat "")
-                |> fun xs -> 
-                    if hasThought then  
-                        //----- stream parse think tokens  -----
-                        xs
-                        |> AsyncSeq.scan StreamParser.updateState (StreamParser.harmonyExp thoughts,(StreamParser.State.Empty,[]))
-                        |> AsyncSeq.collect (fun (_,(_,os)) -> os |> List.rev |> AsyncSeq.ofSeq)
-                        //-----------------------------
-                    else
-                        xs 
                 |> AsyncSeq.toBlockingSeq
                 |> String.concat ""
-            return (output,thoughts.Value)
+            if hasThought then
+                let output,thoughts = StreamParser.splitHarmony rawOutput
+                return output, (thoughts |> Option.defaultValue "")
+            else
+                return rawOutput, ""
         with ex -> 
             if attempts > 0 then    
                 Log.warn $"llm call failed attempts left {attempts - 1}: Error: {ex.Message}"

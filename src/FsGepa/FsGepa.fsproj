@@ -20,6 +20,7 @@
     <Compile Include="Pareto.fs" />
     <Compile Include="Merge.fs" />
     <Compile Include="Reflective.fs" />
+    <Compile Include="Vista.fs" />
     <Compile Include="Gepa.fs" />
   </ItemGroup>
   <ItemGroup>

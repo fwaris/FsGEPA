@@ -1,4 +1,5 @@
 namespace FsGepa.Run
+open FsGepa
 
 module Merge = 
     let rec samplePair prams attempts = 
@@ -25,12 +26,12 @@ module Merge =
         ancestors
         |> Set.exists (fun p -> Set.contains (set [a;b;p]) comboSet |> not)
 
-    let promptsList (a,b,p) = 
+    let promptsList ((a:GrSystem<'a,'b>),(b:GrSystem<'a,'b>),(p:GrSystem<'a,'b>)) = 
         a.sys.modules 
         |> Map.toList
         |> List.map(fun (k,ma) -> k,(ma.prompt, b.sys.modules.[k].prompt, p.sys.modules.[k].prompt))
 
-    let desirable (a,b,p)=
+    let desirable ((a:GrSystem<'a,'b>),(b:GrSystem<'a,'b>),(p:GrSystem<'a,'b>))=
         promptsList (a,b,p)
         |> List.exists (fun (_,(aPr,bPr,pPr)) -> (pPr = aPr && aPr <> bPr) || (pPr = bPr && aPr <> bPr))
 
@@ -66,7 +67,7 @@ module Merge =
         let m' = {sys.modules.[k] with prompt = prompt}
         {sys with modules = sys.modules |> Map.add k m'}
 
-    let merge (a,b,p) =
+    let merge ((a:GrSystem<'a,'b>),(b:GrSystem<'a,'b>),(p:GrSystem<'a,'b>)) =
         let updatedPrompts = 
             promptsList (a,b,p)
             |> List.choose(fun (k,(aPr,bPr,pPr)) -> 
@@ -89,25 +90,58 @@ module Merge =
         if updatedPrompts.IsEmpty then 
             None // try next combo
         else 
-            (p.sys,updatedPrompts)
-            ||> List.fold(fun c (k,pr) -> setPrompt k pr c)
-            |> Some
+            let child =
+                (p.sys,updatedPrompts)
+                ||> List.fold(fun c (k,pr) -> setPrompt k pr c)
+            Some (child, updatedPrompts |> List.map fst)
         
 
-    let tryMergeFromParent (combos:Set<Set<string>>) (a,b,p) = 
+    let tryMergeFromParent (combos:Set<Set<string>>) ((a:GrSystem<'a,'b>),(b:GrSystem<'a,'b>),(p:GrSystem<'a,'b>)) = 
         let combo = set [a.id; b.id; p.id]
         let combos = Set.add combo combos
         let proposed = merge (a,b,p)
         let maxParentScore = max (max a.avgScore.Value b.avgScore.Value) p.avgScore.Value
-        combos, proposed |> Option.map(fun c -> {candidate=c; parentId=p.id; parentMBScore = maxParentScore})
+        combos,
+        proposed
+        |> Option.map(fun (c,updatedModules) -> {
+            candidate = c
+            parentId = p.id
+            parentMBScore = maxParentScore
+            candidateMBScore = None
+            origin = MergeUpdate
+            traceEntry = {
+                step = 0
+                action = "merge"
+                parentId = Some p.id
+                moduleId = None
+                hypothesisId = None
+                hypothesisLabel = None
+                hypothesisSummary = None
+                evidence = []
+                parentScore = Some maxParentScore
+                candidateScore = None
+                accepted = None
+                restartReason = None
+                notes =
+                    updatedModules
+                    |> String.concat ", "
+                    |> fun xs -> if FsGepa.Utils.isEmpty xs then None else Some $"Merged modules: {xs}"
+            }
+        })
+
+    let private withStep step (proposal:ProposedCandidate<'a,'b>) =
+        {
+            proposal with
+                traceEntry = {proposal.traceEntry with step = step}
+        }
         
-    let tryProposeFromPair prams (a,b,ancestors) =
+    let tryProposeFromPair prams ((a:GrSystem<'a,'b>),(b:GrSystem<'a,'b>),(ancestors:GrSystem<'a,'b> list)) =
         let refSet = ref prams.comboSet
         ((prams.comboSet,None),ancestors)
         ||> Seq.scan (fun (combos,_) ancestor -> tryMergeFromParent combos (a,b,ancestor))
         |> Seq.skipWhile (fun (combos,n) -> refSet.Value <- combos; n.IsNone)
         |> Seq.tryHead
-        |> Option.map(fun (_,n) -> Merge (n, refSet.Value))
+        |> Option.map(fun (_,n) -> Merge (n |> Option.map (withStep prams.step), refSet.Value))
         |> Option.defaultValue (Merge (None,refSet.Value))
 
     let tryProposeCandidate (prams:ProposePrams<_,_>) : Async<MergeProposal<_,_>> = 

@@ -15,6 +15,9 @@ type Citation =
     }
 
 module StreamParser =
+    let private checkEmpty (s:string) =
+        if String.IsNullOrWhiteSpace s then None else Some s
+
     type State =
         {
             SourceChunk : string
@@ -297,6 +300,42 @@ module StreamParser =
     let harmonyExp thought =    
         p_ws .> p_channel .> p_ws .> p_analysis .> p_ws .> p_message
         .> (p_thought thought) .> p_strm_any_string
+
+    let splitHarmony (text:string) =
+        let analysisPrefix = "<|channel|>analysis<|message|>"
+        let finalPrefix = "<|channel|>final<|message|>"
+        let endTag = "<|end|>"
+
+        let trimFinalPrefix (value:string) =
+            let trimmed = value.Trim()
+            if trimmed.StartsWith(finalPrefix, StringComparison.Ordinal) then
+                trimmed.Substring(finalPrefix.Length).Trim()
+            else
+                trimmed
+
+        if text.Contains(analysisPrefix, StringComparison.Ordinal) then
+            let startIdx = text.IndexOf(analysisPrefix, StringComparison.Ordinal) + analysisPrefix.Length
+            let endIdx = text.IndexOf(endTag, startIdx, StringComparison.Ordinal)
+            let thoughts =
+                if endIdx >= 0 then text.Substring(startIdx, endIdx - startIdx).Trim()
+                else text.Substring(startIdx).Trim()
+            let remainder =
+                if endIdx >= 0 then
+                    text.Substring(endIdx + endTag.Length)
+                    |> trimFinalPrefix
+                else
+                    ""
+            let output =
+                match checkEmpty remainder with
+                | Some value -> value
+                | None -> thoughts
+            output, checkEmpty thoughts
+        elif text.Contains(finalPrefix, StringComparison.Ordinal) then
+            let startIdx = text.IndexOf(finalPrefix, StringComparison.Ordinal) + finalPrefix.Length
+            let output = text.Substring(startIdx).Trim()
+            output, None
+        else
+            text.Trim(), None
 
 
 // testing helpers

@@ -9,7 +9,9 @@ module Reflective =
         let traces = evaledTask.flowResult.traces |> List.filter (fun t -> t.moduleId = mid)
         {evaledTask with flowResult = {evaledTask.flowResult with traces = traces}}
 
-    let filterEvals moduleId = List.map (filterEval moduleId)
+    let filterEvals moduleId =
+        List.map (filterEval moduleId)
+        >> List.filter (fun e -> e.flowResult.traces |> List.isEmpty |> not)
 
     let setPrompt sys m prompt = 
         {sys with 
@@ -22,10 +24,13 @@ module Reflective =
     let selectCandidate (prams:ProposePrams<_,_>) = async {
         let scores = prams.pool |> List.map (fun c -> c, c.avgScore.Value)
         let total = scores |> List.sumBy snd
-        let _,cums = ((0.0,[]),scores) ||> List.fold (fun (cum,acc) (c,scr) -> let cum = cum + (scr/total) in cum,(c,cum)::acc)
-        let dice = Utils.rng.NextDouble()
-        let selectedC = cums |> List.skipWhile (fun (c,cum) -> cum < dice) |> List.head
-        return fst selectedC
+        if total <= 0.0 then
+            return Utils.randSelect prams.pool
+        else
+            let _,cums = ((0.0,[]),scores) ||> List.fold (fun (cum,acc) (c,scr) -> let cum = cum + (scr/total) in cum,(c,cum)::acc)
+            let dice = Utils.rng.NextDouble()
+            let selectedC = cums |> List.skipWhile (fun (_,cum) -> cum < dice) |> List.head
+            return fst selectedC
     }
 
     let selectModule cfg grSys = grSys.sys.modules |> Map.toList |> List.map snd |> Utils.randSelect 
@@ -37,13 +42,33 @@ module Reflective =
         let evals = Scoring.score prams.cfg candidate.sys prams.tasksMB
                     |> AsyncSeq.toBlockingSeq
                     |> Seq.toList
-        let mEvals = filterEvals m.moduleId evals
+        let mEvals =
+            let filtered = filterEvals m.moduleId evals
+            if filtered.IsEmpty then evals else filtered
+        let parentScore = evals |> List.averageBy (fun x -> x.eval.score)
         let! prompt = Llm.Meta.updatePrompt prams.cfg m mEvals
         let child = setPrompt candidate.sys m prompt
         let proposed = {
                             candidate = child
                             parentId = candidate.id
-                            parentMBScore = evals |> List.averageBy (fun x->x.eval.score)
+                            parentMBScore = parentScore
+                            candidateMBScore = None
+                            origin = ReflectiveUpdate m.moduleId
+                            traceEntry = {
+                                step = prams.step
+                                action = "reflective_update"
+                                parentId = Some candidate.id
+                                moduleId = Some m.moduleId
+                                hypothesisId = None
+                                hypothesisLabel = None
+                                hypothesisSummary = None
+                                evidence = []
+                                parentScore = Some parentScore
+                                candidateScore = None
+                                accepted = None
+                                restartReason = None
+                                notes = None
+                            }
                         }
         return proposed              
     }
