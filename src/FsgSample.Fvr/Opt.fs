@@ -300,7 +300,7 @@ module Opt =
         let tPareto,tFeedback,tTest = Tasks.taskSets()
         let testSet = tTest |> Seq.indexed |> Seq.truncate 100 |> Seq.toList
         let tPareto = List.indexed tPareto
-        let cfg = config_VistaGptOss tFeedback.Length
+        let cfg = {config_VistaGptOss tFeedback.Length with flow_parallelism = 10}
         //let cfg = config_GptOss tFeedback.Length
         //let cfg = config_VistaOpenAI tFeedback.Length
         let sys = createInitialCandidate()     
