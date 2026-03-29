@@ -33,7 +33,7 @@ To invoke FsGepa, the caller supplies a [Config](../FsGepa/Core.fs) instance. Th
 
 IGenerate is a highly abstracted interface for LLM response generation that FsGepa uses to make LLM calls - mostly for prompt updates.
 
-A default IGenerate implementation is included that covers well-known service types (e.g. Chat Completions or Responses compatible APIs). See module [`FsgGenAI.GenAI`](../FsgGenAI/FsgGenAI.fs). You may supply a custom implementation, if necessary.
+A default IGenerate implementation is included that covers well-known service types (e.g. Chat Completions or Responses compatible APIs). See module [`FsGepa.GenAI.Api`](../FsGepa.GenAI/FsGepa.GenAI.fs). You may supply a custom implementation, if necessary.
 
 While an IGenerate instance is *required* for FsGepa, the same will usually also work for evaluation and scoring of the tasks (i.e. data) over which the prompts are optimized. 
 
@@ -83,4 +83,3 @@ The optimization process runs till the *budget* is exhausted. The high level flo
 5. Also evaluate donor candidate (parent) over the same mini batch
 6. If the proposed candidate performs better then its added to the candidate pool
 7. Repeated from step 2. until budget is exhausted.
-

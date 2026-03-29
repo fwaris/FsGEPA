@@ -28,16 +28,13 @@ module Prompts =
     ///variable place holders in the template
     ///with the values held in the given KernelArguments
     let renderPromptWith (promptTemplate:string) (args:KernelArguments) =
-        (task {
-            let b = Kernel.CreateBuilder()
-            //b.Plugins.AddFromType<TimePlugin>("time") |> ignore
-            let k = b.Build()
-            let fac = KernelPromptTemplateFactory( AllowDangerouslySetContent=true)                        //<--- need to set it in both places
-            let cfg = PromptTemplateConfig(template = promptTemplate,AllowDangerouslySetContent=true)      //<--- for it to work
-            let pt = fac.Create(cfg)
-            let! result = pt.RenderAsync(k,args) |> Async.AwaitTask
-            return result
-        }).Result //async not needed as all local
+        let b = Kernel.CreateBuilder()
+        //b.Plugins.AddFromType<TimePlugin>("time") |> ignore
+        let k = b.Build()
+        let fac = KernelPromptTemplateFactory(AllowDangerouslySetContent=true)                        //<--- need to set it in both places
+        let cfg = PromptTemplateConfig(template = promptTemplate, AllowDangerouslySetContent=true)      //<--- for it to work
+        let pt = fac.Create(cfg)
+        pt.RenderAsync(k, args).GetAwaiter().GetResult()
 
     ///render a prompt template by replacing
     ///variable place holders in the template

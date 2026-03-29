@@ -3,11 +3,13 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36518.9
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FsgGenAI", "src\FsgGenAI\FsgGenAI.fsproj", "{7EE706F5-6158-4714-8BE6-22FDCE612DE0}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FsGepa.GenAI", "src\FsGepa.GenAI\FsGepa.GenAI.fsproj", "{7EE706F5-6158-4714-8BE6-22FDCE612DE0}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FsGepa", "src\FsGepa\FsGepa.fsproj", "{E77ACDA5-7A75-447B-D38F-6E0AD1C3D038}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FsgSample.Fvr", "src\FsgSample.Fvr\FsgSample.Fvr.fsproj", "{B389FA5F-A3D8-4999-86D3-20D29E92AC72}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Harmony.Microsoft.Extensions.AI", "src\Harmony.Microsoft.Extensions.AI\Harmony.Microsoft.Extensions.AI.fsproj", "{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -55,18 +57,18 @@ Global
 		{B389FA5F-A3D8-4999-86D3-20D29E92AC72}.Release|x64.Build.0 = Release|Any CPU
 		{B389FA5F-A3D8-4999-86D3-20D29E92AC72}.Release|x86.ActiveCfg = Release|Any CPU
 		{B389FA5F-A3D8-4999-86D3-20D29E92AC72}.Release|x86.Build.0 = Release|Any CPU
-		{4FFE6BB5-C488-4BFB-9359-E7CD376F990D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{4FFE6BB5-C488-4BFB-9359-E7CD376F990D}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{4FFE6BB5-C488-4BFB-9359-E7CD376F990D}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{4FFE6BB5-C488-4BFB-9359-E7CD376F990D}.Debug|x64.Build.0 = Debug|Any CPU
-		{4FFE6BB5-C488-4BFB-9359-E7CD376F990D}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{4FFE6BB5-C488-4BFB-9359-E7CD376F990D}.Debug|x86.Build.0 = Debug|Any CPU
-		{4FFE6BB5-C488-4BFB-9359-E7CD376F990D}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{4FFE6BB5-C488-4BFB-9359-E7CD376F990D}.Release|Any CPU.Build.0 = Release|Any CPU
-		{4FFE6BB5-C488-4BFB-9359-E7CD376F990D}.Release|x64.ActiveCfg = Release|Any CPU
-		{4FFE6BB5-C488-4BFB-9359-E7CD376F990D}.Release|x64.Build.0 = Release|Any CPU
-		{4FFE6BB5-C488-4BFB-9359-E7CD376F990D}.Release|x86.ActiveCfg = Release|Any CPU
-		{4FFE6BB5-C488-4BFB-9359-E7CD376F990D}.Release|x86.Build.0 = Release|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Debug|x64.Build.0 = Debug|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Debug|x86.Build.0 = Debug|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Release|x64.ActiveCfg = Release|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Release|x64.Build.0 = Release|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Release|x86.ActiveCfg = Release|Any CPU
+		{AEC42FE2-C63F-45CD-9AF3-2282EA1E848C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

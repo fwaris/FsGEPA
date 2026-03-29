@@ -125,6 +125,7 @@ module Meta =
     let generatePrompt<'a,'b> cfg modulePrompt metaPromptTemplate (evals:EvaledTask<'a,'b> list) additionalInstr = async {
         let metaPrompt = renderMetaPrompt cfg modulePrompt metaPromptTemplate evals [] additionalInstr
         let! text = callGenerate 5 cfg.generator cfg.default_model None [{role="user"; content=metaPrompt}] (Some typeof<MetaResponse>) None
+
         let resp = 
             text.output
             |> tryDeserialize<MetaResponse>
@@ -193,8 +194,8 @@ module Meta =
         | None -> return {text = newPrompt}, changeSummary
     }
 
-    let updatePromptOverride<'a,'b> cfg modulePrompt (mMeta:ModuleMetaPrompt) (evals:EvaledTask<'a,'b> list) =  async {
-        let! newPrompt = generatePrompt cfg modulePrompt mMeta.metaPrompt evals None
+    let updatePromptOverride<'a,'b> cfg modulePrompt (mMeta:ModuleMetaPrompt) (evals:EvaledTask<'a,'b> list) addInstr =  async {
+        let! newPrompt = generatePrompt cfg modulePrompt mMeta.metaPrompt evals addInstr
         match! mMeta.validate newPrompt with 
         | Some issues -> 
             let! revisedPrompt = generatePrompt cfg modulePrompt mMeta.metaPrompt evals (Some $"Taking into account the following additional directions:\n {issues}")
@@ -203,8 +204,11 @@ module Meta =
     }
 
     let updatePrompt<'a,'b> cfg (gModule:GeModule) (evals:EvaledTask<'a,'b> list) =  async {
+        let addInstr = gModule.outputSchema |> Option.map (fun x -> $"Output Schema: {x}\n")
+        let addInstr = gModule.inputSchema |> Option.map (fun x -> Some $"""Input Schema: {x}\n{addInstr |> Option.defaultValue ""}""" ) |> Option.defaultValue addInstr
+    
         match gModule.metaPrompt with 
-        | Some mMeta -> return! updatePromptOverride cfg gModule.prompt.text mMeta evals
-        | None -> let! text = generatePrompt cfg gModule.prompt.text Prompts.metaPrompt evals None
+        | Some mMeta -> return! updatePromptOverride cfg gModule.prompt.text mMeta evals addInstr
+        | None -> let! text = generatePrompt cfg gModule.prompt.text Prompts.metaPrompt evals addInstr
                   return {text=text}
     }
