@@ -93,23 +93,18 @@ module ResponsesApi =
             |> Seq.choose (function :? Responses.ReasoningSummaryTextPart as t -> Some t.Text | _ -> None)
         | _ -> Seq.empty
 
-    let rec internal callGenerateResponse attempts (respClient:Responses.ResponsesClient) (opts:Responses.CreateResponseOptions) = async {
+    let internal callGenerateResponse (respClient:Responses.ResponsesClient) (opts:Responses.CreateResponseOptions) = async {
         try 
             let! resp = respClient.CreateResponseAsync(opts) |> Async.AwaitTask
             let text = resp.Value.OutputItems |> Seq.collect toTextOutput |> String.concat ""
             let reasoning = resp.Value.OutputItems |> Seq.collect toReasoningOutput |> String.concat ""
             return text, reasoning            
-        with ex -> 
-            if attempts > 0 then 
-                Log.warn $"callGenerateResponse failed, attempts remain {attempts - 1}. Error {ex.Message}"
-                do! Async.Sleep 3000
-                return! callGenerateResponse (attempts - 1) respClient opts
-            else
-                Log.exn (ex,"callGenerateResponse")
-                return raise ex
+        with ex ->
+            Log.exn (ex,"callGenerateResponse")
+            return raise ex
     }
 
-    let internal generate attempts model (chat:ChatMessage list) (outputFormat:JsonElement option) (gopts:GenOpts option) (endpoint:ApiEndpoint) = async {
+    let internal generate model (chat:ChatMessage list) (outputFormat:JsonElement option) (gopts:GenOpts option) (endpoint:ApiEndpoint) = async {
         let copts = OpenAI.OpenAIClientOptions(Endpoint = Uri endpoint.ENDPOINT)
         let respClient = Responses.ResponsesClient(model, ClientModel.ApiKeyCredential(endpoint.API_KEY), copts)
         let responseItems = chat |> Seq.map toResponsesItem
@@ -131,7 +126,7 @@ module ResponsesApi =
             textOpts.TextFormat <- Responses.ResponseTextFormat.CreateJsonSchemaFormat("schema", schemaData, jsonSchemaIsStrict = true)
             opts.TextOptions <- textOpts
         | None -> ()
-        return! callGenerateResponse 5 respClient opts
+        return! callGenerateResponse respClient opts
     }
 
 module CompletionsApi = 
@@ -150,7 +145,7 @@ module CompletionsApi =
             |> Seq.choose (function :? 'T as content -> Some (selector content) | _ -> None))
         |> String.concat ""
 
-    let rec internal callGenerate attempts (client:IChatClient) (chat:ChatMessage list) (opts:ChatOptions) = async {        
+    let internal callGenerate (client:IChatClient) (chat:ChatMessage list) (opts:ChatOptions) = async {        
         try
             let! response = client.GetResponseAsync(chat, opts) |> Async.AwaitTask
             let rawOutput = collectContent<TextContent> (fun c -> c.Text) response.Messages
@@ -161,17 +156,12 @@ module CompletionsApi =
                 |> List.choose checkEmpty
                 |> String.concat "\n\n"
             return output, reasoning
-        with ex -> 
-            if attempts > 0 then    
-                Log.warn $"llm call failed attempts left {attempts - 1}: Error: {ex.Message}"
-                do! Async.Sleep 3000
-                return! callGenerate (attempts - 1) client chat opts
-            else 
-                Log.exn(ex,"callGenerate")
-                return raise ex
+        with ex ->
+            Log.exn(ex,"callGenerate")
+            return raise ex
     }
 
-    let internal generate attempts model chat (outputFormat:JsonElement option) (gopts:GenOpts option) endpoint useHarmony = async {
+    let internal generate model chat (outputFormat:JsonElement option) (gopts:GenOpts option) endpoint useHarmony = async {
         let copts = OpenAI.OpenAIClientOptions(Endpoint = Uri endpoint.ENDPOINT)
         let chatClient = ChatClient(model, ClientModel.ApiKeyCredential(endpoint.API_KEY), copts)
         let baseClient = OpenAIClientExtensions.AsIChatClient(chatClient)
@@ -187,10 +177,10 @@ module CompletionsApi =
         | None -> ()
         if useHarmony then
             use harmonyClient = new HarmonyChatClient(baseClient)
-            return! callGenerate attempts (harmonyClient :> IChatClient) chat opts
+            return! callGenerate (harmonyClient :> IChatClient) chat opts
         else
             use disposableClient = baseClient
-            return! callGenerate attempts disposableClient chat opts
+            return! callGenerate disposableClient chat opts
     }
 
 module Api =
@@ -214,9 +204,9 @@ module Api =
     let generate (backend:Backend) (systemMessage:string option) (chat:ChatMessage list) (responseFormat:Type option) (opts:GenOpts option) (model:Model) = async {
         let outputFormat = responseFormat |> Option.map SchemaUtils.toSchema
         match backend.backendType with 
-        | BackendType.Responses -> return! ResponsesApi.generate 5 model.id chat outputFormat opts backend.endpoint
-        | BackendType.ChatCompletions -> return! CompletionsApi.generate 5 model.id chat outputFormat opts backend.endpoint false
-        | BackendType.ChatCompletionsHarmony -> return! CompletionsApi.generate 5 model.id chat outputFormat opts backend.endpoint true        
+        | BackendType.Responses -> return! ResponsesApi.generate model.id chat outputFormat opts backend.endpoint
+        | BackendType.ChatCompletions -> return! CompletionsApi.generate model.id chat outputFormat opts backend.endpoint false
+        | BackendType.ChatCompletionsHarmony -> return! CompletionsApi.generate model.id chat outputFormat opts backend.endpoint true        
     }
         
     let createDefault  backend =

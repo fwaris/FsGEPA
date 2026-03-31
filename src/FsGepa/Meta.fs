@@ -7,7 +7,6 @@ module Meta =
     open System.Text.RegularExpressions
 
     type MetaResponse = {instructions:string}
-    type HypothesisResponse = {hypotheses:Hypothesis list}
     type RewriteResponse = {instructions:string; change_summary:string}
 
     let truncate len (s:string) = if s.Length < len then s else s.Substring(0,len) + "...[elided]"
@@ -60,13 +59,18 @@ module Meta =
             |> toKebabCase
             |> checkEmpty
             |> Option.defaultValue fallbackId
+        let summary =
+            hypothesis.summary
+            |> checkEmpty
+            |> Option.defaultValue label
         {
             id = normalizedId
             label = label
-            summary =
-                hypothesis.summary
+            summary = summary
+            suggestedFix =
+                hypothesis.suggestedFix
                 |> checkEmpty
-                |> Option.defaultValue label
+                |> Option.defaultValue summary
             evidence =
                 hypothesis.evidence
                 |> List.filter notEmpty
@@ -81,10 +85,14 @@ module Meta =
             id = "general-rewrite"
             label = "General rewrite"
             summary = text |> shorten 400
+            suggestedFix = "Revise the prompt to better match the observed failures."
             evidence = []
             priority = 1
             confidence = 0.25
         }]
+
+    let failureCases (evals:EvaledTask<'a,'b> list) =
+        evals |> List.filter (fun evaled -> evaled.eval.score < 0.999999)
 
     let private feedbackBlock cfg (evals:EvaledTask<'a,'b> list) = 
         evals
@@ -110,6 +118,32 @@ module Meta =
 --- EXAMPLE END ---
 """         ))
         |> String.concat "\n"
+
+    let private traceBlock (trace:OptimizationTraceEntry list) =
+        match trace with
+        | [] -> "none"
+        | xs ->
+            xs
+            |> List.map (fun entry ->
+                let label =
+                    entry.hypothesisLabel
+                    |> Option.orElse entry.hypothesisId
+                    |> Option.defaultValue entry.action
+                let delta =
+                    match entry.candidateScore, entry.parentScore with
+                    | Some candidate, Some parent -> sprintf "%+.4f" (candidate - parent)
+                    | _ -> "n/a"
+                let notes = entry.notes |> Option.bind checkEmpty |> Option.defaultValue "no notes"
+                $"step={entry.step}; label={label}; delta={delta}; notes={notes}")
+            |> String.concat "\n"
+
+    let private proposedHypothesesBlock (hypotheses:Hypothesis list) =
+        match hypotheses with
+        | [] -> "none"
+        | xs ->
+            xs
+            |> List.map (fun h -> $"{h.id}: {h.label}")
+            |> String.concat "\n"
 
     let private renderMetaPrompt cfg modulePrompt metaPromptTemplate (evals:EvaledTask<'a,'b> list) vars additionalInstr =
         let feedback = feedbackBlock cfg evals
@@ -140,32 +174,60 @@ module Meta =
         |> Option.map _.metaPrompt
         |> Option.defaultValue ""
 
-    let generateHypotheses<'a,'b> cfg (gModule:GeModule) (evals:EvaledTask<'a,'b> list) = async {
+    let private requestHypothesis<'a,'b> cfg (gModule:GeModule) (evals:EvaledTask<'a,'b> list) trace priorHypotheses useFree index = async {
         let prompt = 
-            renderMetaPrompt cfg gModule.prompt.text Prompts.vistaHypothesisPrompt evals [
+            renderMetaPrompt cfg gModule.prompt.text (if useFree then Prompts.vistaFreeHypothesisPrompt else Prompts.vistaHeuristicHypothesisPrompt) evals [
                 Vars.module_constraints, moduleConstraints gModule :> obj
-                Vars.hypothesis_count, cfg.vista.hypothesis_count :> obj
+                Vars.optimization_trace, traceBlock trace :> obj
+                Vars.error_taxonomy, Prompts.vistaHeuristicTaxonomy :> obj
+                Vars.excluded_hypotheses, proposedHypothesesBlock priorHypotheses :> obj
             ] None
 
-        let! text = callGenerate 5 cfg.generator (reflectorModel cfg) None [{role="user"; content=prompt}] (Some typeof<HypothesisResponse>) None
-
-        let hypotheses =
+        let! text = callGenerate 5 cfg.generator (reflectorModel cfg) None [{role="user"; content=prompt}] (Some typeof<Hypothesis>) None
+        let hypothesis =
             text.output
-            |> tryDeserialize<HypothesisResponse>
-            |> Option.map (fun (resp:HypothesisResponse) -> resp.hypotheses)
-            |> Option.defaultValue (fallbackHypothesis text.output)
-            |> List.mapi sanitizeHypothesis
-            |> List.sortByDescending (fun h -> h.priority, h.confidence)
-            |> List.truncate cfg.vista.hypothesis_count
+            |> tryDeserialize<Hypothesis>
+            |> Option.defaultValue ((fallbackHypothesis text.output) |> List.head)
+            |> sanitizeHypothesis index
+        return hypothesis
+    }
 
-        return if hypotheses.IsEmpty then fallbackHypothesis text.output else hypotheses
+    let generateHypotheses<'a,'b> cfg (gModule:GeModule) (evals:EvaledTask<'a,'b> list) trace = async {
+        let failures = failureCases evals
+        if failures.IsEmpty then
+            return []
+        else
+            let desired = max 1 cfg.vista.hypothesis_count
+            let rec loop index acc = async {
+                if index >= desired then
+                    return List.rev acc
+                else
+                    let useFree = Utils.rng.NextDouble() < cfg.vista.epsilon_greedy
+                    let! hypothesis = requestHypothesis cfg gModule failures trace (List.rev acc) useFree index
+                    let acc =
+                        if acc |> List.exists (fun existing -> existing.id = hypothesis.id || existing.summary = hypothesis.summary) then
+                            acc
+                        else
+                            hypothesis::acc
+                    return! loop (index + 1) acc
+            }
+            let! hypotheses = loop 0 []
+            let hypotheses = hypotheses |> List.truncate desired
+
+            return
+                if hypotheses.IsEmpty then
+                    fallbackHypothesis "No hypotheses generated from the failed minibatch."
+                else
+                    hypotheses
     }
 
     let private rewritePromptCore<'a,'b> cfg (gModule:GeModule) (evals:EvaledTask<'a,'b> list) hypothesis additionalInstr = async {
         let prompt = 
             renderMetaPrompt cfg gModule.prompt.text Prompts.vistaRewritePrompt evals [
                 Vars.module_constraints, moduleConstraints gModule :> obj
+                Vars.selected_label, hypothesis.label :> obj
                 Vars.selected_hypothesis, Utils.formatJson hypothesis :> obj
+                Vars.selected_fix, hypothesis.suggestedFix :> obj
             ] additionalInstr
 
         let! text = callGenerate 5 cfg.generator (reflectorModel cfg) None [{role="user"; content=prompt}] (Some typeof<RewriteResponse>) None
@@ -189,6 +251,46 @@ module Meta =
             | Some issues -> 
                 let extra = $"Revise the prompt to satisfy the validator feedback while still targeting the selected hypothesis.\nValidator feedback:\n{issues}"
                 let! revisedPrompt, revisedSummary = rewritePromptCore cfg gModule evals hypothesis (Some extra)
+                return {text = revisedPrompt}, $"{changeSummary} {revisedSummary}".Trim()
+            | None -> return {text = newPrompt}, changeSummary
+        | None -> return {text = newPrompt}, changeSummary
+    }
+
+    let private restartPromptCore cfg (gModule:GeModule) (currentDraft:Prompt) observation issue = async {
+        let prompt =
+            [
+                Vars.current_instruction, currentDraft.text :> obj
+                Vars.module_constraints, moduleConstraints gModule :> obj
+                Vars.restart_observation, observation :> obj
+                Vars.restart_issue, (issue |> Option.defaultValue "No explicit issue was recorded.") :> obj
+            ]
+            |> Prompts.renderPrompt Prompts.vistaRestartPrompt
+
+        let! text = callGenerate 5 cfg.generator (reflectorModel cfg) None [{role="user"; content=prompt}] (Some typeof<RewriteResponse>) None
+        let rewritten, changeSummary =
+            match text.output |> tryDeserialize<RewriteResponse> with
+            | Some resp ->
+                let summary =
+                    resp.change_summary
+                    |> checkEmpty
+                    |> Option.defaultValue "Initialized prompt from model output."
+                resp.instructions, summary
+            | None -> text.output, "Initialized prompt from model output."
+        return rewritten, changeSummary
+    }
+
+    let restartPromptFromObservation cfg (gModule:GeModule) currentDraft observation issue = async {
+        let! newPrompt, changeSummary = restartPromptCore cfg gModule currentDraft observation issue
+        match gModule.metaPrompt with
+        | Some mMeta ->
+            match! mMeta.validate newPrompt with
+            | Some issues ->
+                let mergedIssue =
+                    [ issue |> Option.defaultValue ""; issues ]
+                    |> List.filter notEmpty
+                    |> String.concat "\n"
+                    |> fun x -> if notEmpty x then Some x else None
+                let! revisedPrompt, revisedSummary = restartPromptCore cfg gModule currentDraft observation mergedIssue
                 return {text = revisedPrompt}, $"{changeSummary} {revisedSummary}".Trim()
             | None -> return {text = newPrompt}, changeSummary
         | None -> return {text = newPrompt}, changeSummary

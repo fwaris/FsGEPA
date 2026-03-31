@@ -38,12 +38,16 @@ type VistaConfig = {
     hypotheses_to_validate : int
     ///Probability of exploring a lower-priority hypothesis during selection.
     epsilon_greedy : float
-    ///After this many rejected proposals, VISTA may restart from the seed/frontier.
+    ///Optional conservative extension: only permit restart sampling after this many stalled rounds.
+    ///When None, paper-aligned restart sampling happens at the start of every round.
     random_restart_stagnation : int option
-    ///Probability of taking a restart once the stagnation threshold is met.
+    ///Probability of taking a restart when the restart gate is open.
     random_restart_probability : float
-    ///When restarting, probability of branching from the original seed candidate.
+    ///Legacy compatibility knob for older restart strategies.
+    ///The paper-aligned blank-prompt restart path ignores this value.
     restart_from_seed_probability : float
+    ///Maximum number of look-ahead refinement steps during blank-prompt restart.
+    restart_lookahead_steps : int
     ///Optional override model used for diagnosis and prompt rewriting.
     reflector_model : Model option
     ///Optional model overrides used during minibatch validation.
@@ -52,12 +56,13 @@ type VistaConfig = {
     use_merge : bool
 }
     with static member Default = {
-                            hypothesis_count = 4
+                            hypothesis_count = 3
                             hypotheses_to_validate = 3
-                            epsilon_greedy = 0.20
-                            random_restart_stagnation = Some 4
-                            random_restart_probability = 0.35
-                            restart_from_seed_probability = 0.60
+                            epsilon_greedy = 0.10
+                            random_restart_stagnation = None
+                            random_restart_probability = 0.20
+                            restart_from_seed_probability = 0.0
+                            restart_lookahead_steps = 3
                             reflector_model = None
                             validation_models = []
                             use_merge = false
@@ -68,6 +73,7 @@ type Hypothesis = {
     id : string
     label : string
     summary : string
+    suggestedFix : string
     evidence : string list
     priority : int
     confidence : float
@@ -101,7 +107,7 @@ type OptimizationTraceEntry = {
 type Config = {
     ///Number of runs ('roll outs')
     budget : int
-    ///Number of parallel flow executions
+    ///Maximum concurrent outbound model requests within a single optimizer run.
     flow_parallelism : int 
     ///Size of the mini batch sample over which a potential new candidate is scored
     mini_batch_size : int

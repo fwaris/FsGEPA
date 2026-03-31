@@ -106,6 +106,7 @@ module Gepa =
     }
 
     let run cfg (geSys:GeSystem<'input,'output>) (tasksPareto:(int*GeTask<'input,'output>) seq) (tasksFeedback:GeTask<'input,'output> seq) =
-        match cfg.optimizer_mode with
-        | GepaMode -> runGepa cfg geSys tasksPareto tasksFeedback
-        | VistaMode -> Vista.run cfg geSys tasksPareto tasksFeedback
+        ScheduledRun.withScheduledGenerator cfg (fun cfg ->
+            match cfg.optimizer_mode with
+            | GepaMode -> runGepa cfg geSys tasksPareto tasksFeedback
+            | VistaMode -> Vista.run cfg geSys tasksPareto tasksFeedback)

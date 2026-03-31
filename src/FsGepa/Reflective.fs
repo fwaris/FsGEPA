@@ -13,6 +13,21 @@ module Reflective =
         List.map (filterEval moduleId)
         >> List.filter (fun e -> e.flowResult.traces |> List.isEmpty |> not)
 
+    let private paretoWinCounts (pool:GrSystem<'a,'b> list) =
+        pool
+        |> List.collect (fun c -> c.evals |> List.map (fun e -> e.index, c.id, e.eval.score))
+        |> List.groupBy (fun (taskIndex,_,_) -> taskIndex)
+        |> List.collect (fun (_, taskScores) ->
+            let best = taskScores |> List.maxBy (fun (_,_,score) -> score) |> fun (_,_,score) -> score
+            let winners =
+                taskScores
+                |> List.filter (fun (_,_,score) -> score = best)
+            let share = 1.0 / float winners.Length
+            winners |> List.map (fun (_,candidateId,_) -> candidateId, share))
+        |> List.groupBy fst
+        |> List.map (fun (candidateId, wins) -> candidateId, wins |> List.sumBy snd)
+        |> Map.ofList
+
     let setPrompt sys m prompt = 
         {sys with 
             modules = 
@@ -22,12 +37,15 @@ module Reflective =
         }
 
     let selectCandidate (prams:ProposePrams<_,_>) = async {
-        let scores = prams.pool |> List.map (fun c -> c, c.avgScore.Value)
+        let winCounts = paretoWinCounts prams.pool
+        let scores =
+            prams.pool
+            |> List.map (fun c -> c, winCounts |> Map.tryFind c.id |> Option.defaultValue c.avgScore.Value)
         let total = scores |> List.sumBy snd
         if total <= 0.0 then
             return Utils.randSelect prams.pool
         else
-            let _,cums = ((0.0,[]),scores) ||> List.fold (fun (cum,acc) (c,scr) -> let cum = cum + (scr/total) in cum,(c,cum)::acc)
+            let _,cums = ((0.0,[]),scores) ||> List.fold (fun (cum,acc) (c,scr) -> let cum = cum + (scr/total) in cum,acc @ [(c,cum)])
             let dice = Utils.rng.NextDouble()
             let selectedC = cums |> List.skipWhile (fun (_,cum) -> cum < dice) |> List.head
             return fst selectedC
@@ -35,9 +53,7 @@ module Reflective =
 
     let selectModule cfg grSys = grSys.sys.modules |> Map.toList |> List.map snd |> Utils.randSelect 
 
-    ///single step of reflective prompt optimizer process
-    let proposeCandidate (prams:ProposePrams<'input,'output>) = async {
-        let! candidate = selectCandidate prams
+    let proposeCandidateForParent (prams:ProposePrams<'input,'output>) candidate = async {
         let m = selectModule prams.cfg candidate
         let evals = Scoring.score prams.cfg candidate.sys prams.tasksMB
                     |> AsyncSeq.toBlockingSeq
@@ -71,4 +87,10 @@ module Reflective =
                             }
                         }
         return proposed              
+    }
+
+    ///single step of reflective prompt optimizer process
+    let proposeCandidate (prams:ProposePrams<'input,'output>) = async {
+        let! candidate = selectCandidate prams
+        return! proposeCandidateForParent prams candidate
     }

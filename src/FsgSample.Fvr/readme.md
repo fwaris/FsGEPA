@@ -1,85 +1,166 @@
 # FsgSample.Fvr
-#### A sample FsGepa optimization set up.
 
-## Overview and Setup
-The sample is based on [Feverous task and dataset](https://fever.ai/dataset/feverous.html).
+`FsgSample.Fvr` is the more involved example sample in the repo. It uses the FEVEROUS dataset to show how to optimize a multi-step claim-verification system with FsGepa.
 
-The task is to consider a *claim* and *supporting facts* and determine if the given facts SUPPORT / REFUTE the claim or there is NOT ENOUGH INFO. 
+If you want a lighter benchmark focused on direct `GEPA` vs `VISTA` comparison, see [FsgSample.Gsm8k](/src/FsgSample.Gsm8k/readme.md). If you want to understand how to wire a realistic multi-module flow into FsGepa, this is the better starting point.
 
-Fortunately, the Feverous team has created an easy-to-use task browser for us! Click [this link](html) to see an example task for better clarity.
+## Overview
 
-There are two dataset required to run this sample:
+The task is to take:
+
+- a claim
+- supporting facts gathered from Wikipedia
+
+and predict whether the evidence:
+
+- `SUPPORTS`
+- `REFUTES`
+- `NOT ENOUGH INFO`
+
+The FEVEROUS team provides an interactive task browser, which is useful for getting familiar with the dataset shape. See the dataset site here:
+
+- [Feverous task and dataset](https://fever.ai/dataset/feverous.html)
+
+## Data setup
+
+This sample requires two downloaded files:
+
 - [Feverous development JSONL file](https://fever.ai/download/feverous/feverous_dev_challenges.jsonl)
-- [Wikipedia article SQLLite Database](https://fever.ai/download/feverous/feverous-wiki-pages-db.zip)
+- [Wikipedia article SQLite database](https://fever.ai/download/feverous/feverous-wiki-pages-db.zip)
 
-The sample expects the following two files (available from the above links) in the user's 'Downloads' directory:
+The sample expects these files in `~/Downloads`:
 
-- feverous_dev_challenges.jsonl
-- feverous_wikiv1.db
----
-> #### Tools and Services Required: 
-> - dotnet sdk 9.x
-> - Visual Studio Code
-> - Ionide F# VS Code Extension
-> - Access to a suitable LLM (setup described later)
----
+- `feverous_dev_challenges.jsonl`
+- `feverous_wikiv1.db`
 
-Once the data, tooling and service requirements are met, the solution can be compiled with the ```dotnet build``` command, run from the project root folder. Then from the *src/FsgSample.Fer* folder use ```dotnet run``` to run the sample. 
+## Tooling
 
-### FsGepa Configuration and LLM Service Access
-FsGepa of course requires access to one or more LLMs, either through local services or through APIs.
+- `dotnet` SDK
+- an F#-capable editor such as VS Code with Ionide
+- access to a suitable LLM backend
 
-To invoke FsGepa, the caller supplies a [Config](../FsGepa/Core.fs) instance. The properties of this structure are well documented in code comments. However one key property is `generate` which requires an instance of the [IGenerate](../FsGepa/Core.fs) interface. 
+## Running the sample
 
-IGenerate is a highly abstracted interface for LLM response generation that FsGepa uses to make LLM calls - mostly for prompt updates.
+Run from the repo root.
 
-A default IGenerate implementation is included that covers well-known service types (e.g. Chat Completions or Responses compatible APIs). See module [`FsGepa.GenAI.Api`](../FsGepa.GenAI/FsGepa.GenAI.fs). You may supply a custom implementation, if necessary.
+### Compare mode
 
-While an IGenerate instance is *required* for FsGepa, the same will usually also work for evaluation and scoring of the tasks (i.e. data) over which the prompts are optimized. 
+Compare mode computes a shared holdout baseline and then runs both `GEPA` and `VISTA` over the same initial system:
 
-The optimization process for FsgSample.Fvr is explained next. Use this as the basis for your own optimization set ups.
+```bash
+dotnet run --project src/FsgSample.Fvr -- compare
+```
 
-## Core Requirements for FsGepa Optimization
+The comparison output reports:
 
-There four main items required to start FsGepa optimization.
-1. Config structure with the required backend services (i.e. functional IGenerate).
-2. Pareto tasks - a fixed list of tasks that are used to find the pareto frontier.
-3. Feedback tasks - a sequence of tasks from which mini batches will be sampled to evaluate proposed new candidates.
-4. Initial candidate *System* which will be evolved to find new candidates as the optimization progresses.
+- baseline score
+- optimized score
+- improvement
+- candidate count
+- elapsed time
+- winner
 
-Config is already explained above. The other items are explained next.
+### Standalone mode
 
-The core types required to set up optimization are defined in [Core.fs](../FsGepa/Core.fs). They are generic and somewhat inter-related. These are explained first as the rest of the concepts are dependent on them.
+If you run the sample without `compare`, it starts the standalone optimization entry point:
 
-> `GeSystem<'input,'output>` is a candidate *System* (as per GEPA paper). It holds the prompts that are to be optimized. The prompts are contained in *'modules'* (also a term from the paper). Additionally, `GeSystem<_,_>` has the *`flow`* function, which represents the *processing* i.e. take the `'input` and produce the `'output`. FsGepa does not impose any restrictions on `flow`; it may call external tools and/or invoke one or more modules, multiple times. 
+```bash
+dotnet run --project src/FsgSample.Fvr
+```
 
-> `GeTask<'input,'output>` holds the `'input` data and references an `evaluate` function which when given the `'input` and the `'output` (obtained from `flow`) produces a *score* [0..1] and optional feedback.
+At the moment, this path uses the VISTA GPT-OSS configuration selected in `Opt.fs` and streams telemetry to the console.
 
-There are additional types are other details that are omitted to keep this explanation relatively understandable. 
+## Environment variables
 
-## Feverous `Tasks`
-For the Feverous setup, `'input` is bound to `FeverousResolved` - defined in [Data.fs](/src/FsgSample.Fvr/Data.fs). It contains the *claim*, *label* (ground truth) and the *supporting facts* formatted as a markdown document for easier LLM consumption. `FeverousResolved` instances are created by ingesting raw records from the JSONL file and combining them with the Wikipedia SQLLite text data. The processing is somewhat involved, see [Data.fs](/src/FsgSample.Fvr/Data.fs) for details.
+### Backend selection
 
-The `'output` type is bound to `Answer` defined in [Tasks.fs](/src/FsgSample.Fvr/Tasks.fs). The `GeSystem<_,_>` `flow` function will convert the JSON response (*structured output*) form the LLM to an `Answer` instance. [Tasks.fs](/src/FsgSample.Fvr/Tasks.fs) also provides the logic for finding the pareto and feedback tasks, as described earlier, and the `evaluate` function associated with each `GeTask<FeverousResolved,Answer>` instance.
+- `FSGEPA_LLAMACPP_ENDPOINT`
+  - default: `http://localhost:8081/v1`
+- `FSGEPA_LLAMACPP_MODEL`
+  - default: `gpt-oss-20b-mxfp4.gguf`
 
-## Feverous `System`
-[Opt.fs](/src/FsgSample.Fvr/Opt.fs) contains the construction of the initial `GeSystem<FeverousRecord,Answer>` instance that will serve as the root for the optimization run.
+### Compare mode
 
-The `flow` function has two modules (or prompts).:
--  The first prompt takes the *claim* and *supporting facts* in the `'input` and produces a relevant *summary* of the facts. 
-- The second prompt generates the `Answer` from the *claim* and the *summary*.
+- `FSGEPA_COMPARE_BUDGET`
+- `FSGEPA_COMPARE_MINI_BATCH`
+- `FSGEPA_COMPARE_PARETO`
+- `FSGEPA_COMPARE_FEEDBACK`
+- `FSGEPA_COMPARE_HOLDOUT`
 
-The two modules (with starer prompts) and the `flow` function are all defined in [Opt.fs](/src/FsgSample.Fvr/Opt.fs). FsGepa optimization is launched from the `start()` function also defined there.
+Example:
 
-## Optimization Run
-After kick-off, optimization progress is relayed back to the caller via a telemetry channel (see [Config.fs](/src/FsGepa/Core.fs)). Events include new candidate *Systems* being added to the pool; new best prompts; etc. The events are defined in [Telemetry.fs](/src/FsGepa/Telemetry.fs). The caller can choose to take appropriate action (e.g. save the new best prompts as they are discovered).
+```bash
+env \
+  FSGEPA_COMPARE_BUDGET=2 \
+  FSGEPA_COMPARE_PARETO=12 \
+  FSGEPA_COMPARE_FEEDBACK=8 \
+  FSGEPA_COMPARE_HOLDOUT=12 \
+  dotnet run --project src/FsgSample.Fvr -- compare
+```
 
-The optimization process runs till the *budget* is exhausted. The high level flow is as follows:
+## FsGepa configuration and LLM access
 
-1. Perform initialization
-2. Determine the new pareto frontier - i.e., candidate `GeSystems<_,_>` instances that are dominant over other candidates in their performance over the pareto task set.
-3. Propose a new candidate `GeSystem<_,_>` by either mutation (reflective update) or cross-over (system-aware merge)
-4. Evaluate the proposed candidate over a mini batch sample of tasks drawn from the feedback task pool.
-5. Also evaluate donor candidate (parent) over the same mini batch
-6. If the proposed candidate performs better then its added to the candidate pool
-7. Repeated from step 2. until budget is exhausted.
+To invoke FsGepa, the caller supplies a [`Config`](../FsGepa/Core.fs) instance. One key field is `generator`, which is an implementation of [`IGenerate`](../FsGepa/Core.fs).
+
+`IGenerate` is the abstraction FsGepa uses for outbound model calls, primarily for prompt updates and reflective reasoning. A default implementation is included for common API styles in [`FsGepa.GenAI.Api`](../FsGepa.GenAI/FsGepa.GenAI.fs), but you can also provide your own.
+
+In many setups, the same backend used for optimizer reflection is also used by the sample’s `flow` during task execution.
+
+## Core requirements for optimization
+
+There are four main ingredients required to run optimization:
+
+1. A `Config` instance with working backend access
+2. A fixed pareto task set
+3. A feedback task pool used for minibatch evaluation
+4. An initial candidate `GeSystem<'input,'output>`
+
+The core types used to express this are defined in [`Core.fs`](../FsGepa/Core.fs).
+
+- `GeSystem<'input,'output>`
+  - a candidate system containing prompt-bearing modules plus the `flow` function that processes the task end to end
+- `GeTask<'input,'output>`
+  - a task input together with the evaluation function that scores a `FlowResult`
+
+## FEVEROUS tasks in this sample
+
+For this setup, the input type is `FeverousResolved`, defined in [Data.fs](/src/FsgSample.Fvr/Data.fs). It contains:
+
+- the claim
+- the ground-truth label
+- the supporting facts formatted for model consumption
+
+These values are built by combining the raw JSONL records with the Wikipedia SQLite data.
+
+The output type is `Answer`, defined in [Tasks.fs](/src/FsgSample.Fvr/Tasks.fs). The sample flow converts the model response into this output type, and the same module also contains the task construction and evaluation logic.
+
+## The system being optimized
+
+The initial system is built in [Opt.fs](/src/FsgSample.Fvr/Opt.fs).
+
+This flow contains two modules:
+
+- a summarization prompt that reads the claim and supporting facts and produces a concise evidence summary
+- a decision prompt that predicts the FEVEROUS label from the claim and summary
+
+This makes the sample useful as a reference for multi-module prompt optimization rather than only single-prompt tuning.
+
+## Optimization flow
+
+Once started, optimization progress is emitted through telemetry events defined in [`Telemetry.fs`](../FsGepa/Telemetry.fs). These events include updates such as newly accepted candidates, new best prompts, and frontier changes.
+
+At a high level the loop is:
+
+1. Initialize the candidate pool
+2. Determine the current pareto frontier
+3. Propose a new candidate through reflection, merge, or VISTA-style diagnosis depending on the active optimizer mode
+4. Evaluate the proposal on a minibatch from the feedback pool
+5. Compare it against the relevant parent candidate on the same minibatch
+6. Accept it into the pool if it improves
+7. Repeat until the budget is exhausted
+
+## Notes
+
+- This sample is more realistic than the GSM8K sample because it exercises a multi-step flow
+- The GSM8K sample is usually a better benchmark when you want a clearer optimizer-to-optimizer comparison signal
+- Backend reliability matters a lot for long runs, especially when working with local models

@@ -27,48 +27,16 @@ module Vista =
         {trace with candidateScore = Some score; accepted = Some accepted}
 
     let private selectHypotheses cfg (hypotheses:Hypothesis list) =
-        let desired = max 1 (min cfg.vista.hypotheses_to_validate hypotheses.Length)
-        let rec loop (acc:Hypothesis list) (remaining:Hypothesis list) =
-            if acc |> List.length >= desired || List.isEmpty remaining then
-                List.rev acc
-            else
-                let ordered = remaining |> List.sortByDescending (fun h -> h.priority, h.confidence)
-                let picked =
-                    if List.length ordered = 1 then
-                        List.head ordered
-                    elif Utils.rng.NextDouble() < cfg.vista.epsilon_greedy then
-                        Utils.randSelect ordered
-                    else
-                        List.head ordered
-                let remaining =
-                    remaining
-                    |> List.filter (fun h -> h.id <> picked.id)
-                loop (picked::acc) remaining
-        loop [] hypotheses
+        hypotheses
+        |> List.sortByDescending (fun h -> h.priority, h.confidence)
+        |> List.truncate (max 1 (min cfg.vista.hypotheses_to_validate hypotheses.Length))
 
-    let private chooseRestartParent (runState:GrRun<'a,'b>) (pool:GrSystem<'a,'b> list) =
-        let seedCandidate =
-            runState.candidates
-            |> List.tryFind (fun c -> c.id = runState.seedId)
-            |> Option.defaultValue (Utils.randSelect runState.candidates)
-
-        let frontierCandidate =
-            if pool.IsEmpty then seedCandidate else Utils.randSelect pool
-
-        if Utils.rng.NextDouble() <= runState.cfg.vista.restart_from_seed_probability then
-            seedCandidate, "seed_restart"
-        else
-            frontierCandidate, "frontier_restart"
-
-    let private maybeRestart (runState:GrRun<'a,'b>) (pool:GrSystem<'a,'b> list) =
-        match runState.cfg.vista.random_restart_stagnation with
-        | Some threshold
-            when runState.stalled >= threshold
-              && Utils.rng.NextDouble() <= runState.cfg.vista.random_restart_probability ->
-                let parent,restartReason = chooseRestartParent runState pool
-                Tlm.postRestartTriggered runState.cfg parent.id restartReason
-                Some (parent,restartReason)
-        | _ -> None
+    let private shouldRestart (runState:GrRun<'a,'b>) =
+        let gateOpen =
+            match runState.cfg.vista.random_restart_stagnation with
+            | Some threshold -> runState.stalled >= threshold
+            | None -> true
+        gateOpen && Utils.rng.NextDouble() <= runState.cfg.vista.random_restart_probability
 
     let private tryMerge (prams:ProposePrams<'input,'output>) = async {
         let hasMultiple = prams.pool |> List.tryHead |> Option.map (fun s -> s.sys.modules.Count > 0 ) |> Option.defaultValue false
@@ -76,6 +44,54 @@ module Vista =
             return! Merge.tryProposeCandidate prams
         else
             return Merge (None,prams.comboSet)
+    }
+
+    let private parentScoreFor prams parent evals =
+        let baseParentScore = evals |> List.averageBy (fun x -> x.eval.score)
+        match prams.cfg.vista.validation_models with
+        | [] -> baseParentScore
+        | models -> Scoring.averageScoreMultiModel prams.cfg models parent.sys prams.tasksMB
+
+    let private parentModuleEvals prams parent m =
+        let evals =
+            Scoring.score prams.cfg parent.sys prams.tasksMB
+            |> AsyncSeq.toBlockingSeq
+            |> Seq.toList
+        let mEvals =
+            let filtered = Reflective.filterEvals m.moduleId evals
+            if filtered.IsEmpty then evals else filtered
+        evals, mEvals
+
+    let private observeModuleRun cfg sys (m:GeModule) (taskIndex,task) = async {
+        let! _,task,flowResult = Scoring.runTask 5 cfg sys (taskIndex,task)
+        let! evaled = Scoring.evalTask cfg (taskIndex,task,flowResult)
+        let observation =
+            flowResult.traces
+            |> List.tryFind (fun trace -> trace.moduleId = m.moduleId)
+            |> Option.orElse (flowResult.traces |> List.tryHead)
+            |> Option.map _.response
+            |> Option.defaultValue "No module trace was captured."
+        let issue =
+            if evaled.eval.score >= 0.999999 then
+                None
+            else
+                evaled.eval.feedback.text() |> checkEmpty
+        return evaled,observation,issue
+    }
+
+    let private restartLookahead prams parent m seedEval = async {
+        let maxSteps = max 1 prams.cfg.vista.restart_lookahead_steps
+        let rec loop step currentDraft summaries = async {
+            let sys = Reflective.setPrompt parent.sys m currentDraft
+            let! _,observation,issue = observeModuleRun prams.cfg sys m (seedEval.index, seedEval.task)
+            let! nextPrompt,summary = Llm.Meta.restartPromptFromObservation prams.cfg m currentDraft observation issue
+            let summaries = summaries @ [summary]
+            if step >= maxSteps || issue.IsNone then
+                return nextPrompt,summaries
+            else
+                return! loop (step + 1) nextPrompt summaries
+        }
+        return! loop 1 {text=""} []
     }
 
     let private validateHypothesis prams parent m mEvals parentScore hypothesis = async {
@@ -91,62 +107,114 @@ module Vista =
         }
     }
 
-    let private proposeCandidate (prams:ProposePrams<'input,'output>) (restart:(GrSystem<'input,'output> * string) option) = async {
-        let! parent =
-            match restart with
-            | Some (forcedParent,_) -> async { return forcedParent }
-            | None -> Reflective.selectCandidate prams
+    let private validateHypothesisSafe prams parent m mEvals parentScore hypothesis = async {
+        let! result = validateHypothesis prams parent m mEvals parentScore hypothesis |> Async.Catch
+        match result with
+        | Choice1Of2 validated -> return Some validated
+        | Choice2Of2 ex ->
+            Log.warn $"VISTA hypothesis validation failed for module={m.moduleId}, hypothesis={hypothesis.id}/{hypothesis.label}. Error: {ex.Message}"
+            return None
+    }
 
+    let private proposeRestartCandidate (prams:ProposePrams<'input,'output>) parent = async {
         let m = Reflective.selectModule prams.cfg parent
-        let evals =
-            Scoring.score prams.cfg parent.sys prams.tasksMB
-            |> AsyncSeq.toBlockingSeq
-            |> Seq.toList
-        let mEvals =
-            let filtered = Reflective.filterEvals m.moduleId evals
-            if filtered.IsEmpty then evals else filtered
-        let baseParentScore = evals |> List.averageBy (fun x -> x.eval.score)
-        let parentScore =
-            match prams.cfg.vista.validation_models with
-            | [] -> baseParentScore
-            | models -> Scoring.averageScoreMultiModel prams.cfg models parent.sys prams.tasksMB
-        let! hypotheses = Llm.Meta.generateHypotheses prams.cfg m mEvals
-        Tlm.postHypothesesGenerated prams.cfg parent.id m.moduleId hypotheses
-        let selectedHypotheses = selectHypotheses prams.cfg hypotheses
-        let! validated =
-            selectedHypotheses
-            |> List.map (validateHypothesis prams parent m mEvals parentScore)
-            |> Async.Parallel
-        let best =
-            validated
-            |> Array.toList
-            |> List.maxBy (fun candidate -> candidate.score)
-        let restarted,restartReason =
-            match restart with
-            | Some (_,reason) -> true, Some reason
-            | None -> false, None
-        return {
-            candidate = best.child
-            parentId = parent.id
-            parentMBScore = parentScore
-            candidateMBScore = Some best.score
-            origin = VistaUpdate (m.moduleId, best.hypothesis.id, best.hypothesis.label, restarted)
-            traceEntry = {
-                step = prams.step
-                action = "vista_hypothesis_update"
-                parentId = Some parent.id
-                moduleId = Some m.moduleId
-                hypothesisId = Some best.hypothesis.id
-                hypothesisLabel = Some best.hypothesis.label
-                hypothesisSummary = Some best.hypothesis.summary
-                evidence = best.hypothesis.evidence
-                parentScore = Some parentScore
-                candidateScore = Some best.score
-                accepted = None
-                restartReason = restartReason
-                notes = Some best.changeSummary
+        let evals,mEvals = parentModuleEvals prams parent m
+        let parentScore = parentScoreFor prams parent evals
+        let seedEval =
+            Llm.Meta.failureCases mEvals
+            |> List.tryHead
+            |> Option.orElse (mEvals |> List.tryHead)
+            |> Option.orElse (evals |> List.tryHead)
+        match seedEval with
+        | Some seedEval ->
+            Tlm.postRestartTriggered prams.cfg parent.id "blank_restart"
+            let! prompt,changeSummaries = restartLookahead prams parent m seedEval
+            let child = Reflective.setPrompt parent.sys m prompt
+            let score = Scoring.averageScoreMultiModel prams.cfg prams.cfg.vista.validation_models child prams.tasksMB
+            let notes =
+                changeSummaries
+                |> List.filter notEmpty
+                |> String.concat " "
+                |> checkEmpty
+            return {
+                candidate = child
+                parentId = parent.id
+                parentMBScore = parentScore
+                candidateMBScore = Some score
+                origin = VistaUpdate (m.moduleId, "blank-restart", "initialize_from_model_output", true)
+                traceEntry = {
+                    step = prams.step
+                    action = "vista_restart"
+                    parentId = Some parent.id
+                    moduleId = Some m.moduleId
+                    hypothesisId = Some "blank-restart"
+                    hypothesisLabel = Some "initialize_from_model_output"
+                    hypothesisSummary = Some "Initialize the prompt from model output rather than inherited seed text."
+                    evidence =
+                        [
+                            seedEval.eval.feedback.text()
+                        ]
+                        |> List.filter notEmpty
+                    parentScore = Some parentScore
+                    candidateScore = Some score
+                    accepted = None
+                    restartReason = Some "blank_restart"
+                    notes = notes
+                }
             }
-        }
+        | None ->
+            Log.warn $"VISTA restart fallback to reflective update for module={m.moduleId}; no seed task was available."
+            return! Reflective.proposeCandidateForParent prams parent
+    }
+
+    let private proposeHypothesisCandidate (prams:ProposePrams<'input,'output>) parent = async {
+        let m = Reflective.selectModule prams.cfg parent
+        let evals,mEvals = parentModuleEvals prams parent m
+        let failures = Llm.Meta.failureCases mEvals
+        if failures.IsEmpty then
+            Log.warn $"VISTA fallback to reflective update for module={m.moduleId}; minibatch had no failed cases."
+            return! Reflective.proposeCandidateForParent prams parent
+        else
+            let parentScore = parentScoreFor prams parent evals
+            let! hypotheses = Llm.Meta.generateHypotheses prams.cfg m failures parent.history
+            Tlm.postHypothesesGenerated prams.cfg parent.id m.moduleId hypotheses
+            let selectedHypotheses = selectHypotheses prams.cfg hypotheses
+            let! validated =
+                selectedHypotheses
+                |> List.map (validateHypothesisSafe prams parent m failures parentScore)
+                |> Async.Parallel
+            let validated =
+                validated
+                |> Array.choose id
+                |> Array.toList
+            match validated with
+            | _::_ ->
+                let best = validated |> List.maxBy (fun candidate -> candidate.score)
+                return {
+                    candidate = best.child
+                    parentId = parent.id
+                    parentMBScore = parentScore
+                    candidateMBScore = Some best.score
+                    origin = VistaUpdate (m.moduleId, best.hypothesis.id, best.hypothesis.label, false)
+                    traceEntry = {
+                        step = prams.step
+                        action = "vista_hypothesis_update"
+                        parentId = Some parent.id
+                        moduleId = Some m.moduleId
+                        hypothesisId = Some best.hypothesis.id
+                        hypothesisLabel = Some best.hypothesis.label
+                        hypothesisSummary = Some best.hypothesis.summary
+                        evidence = best.hypothesis.evidence
+                        parentScore = Some parentScore
+                        candidateScore = Some best.score
+                        accepted = None
+                        restartReason = None
+                        notes = Some best.changeSummary
+                    }
+                }
+            | [] ->
+                Log.warn $"VISTA fallback to reflective update for module={m.moduleId}; no hypotheses validated successfully."
+                return! Reflective.proposeCandidateForParent prams parent
     }
 
     let private getProposal (runState:GrRun<'input,'output>) filteredPool tasksMB = async {
@@ -154,8 +222,12 @@ module Vista =
         match! tryMerge prams with
         | Merge (Some c,cs) -> return c,cs,true
         | Merge (None,cs) ->
-            let restart = maybeRestart runState filteredPool
-            let! proposal = proposeCandidate prams restart
+            let! parent = Reflective.selectCandidate prams
+            let! proposal =
+                if shouldRestart runState then
+                    proposeRestartCandidate prams parent
+                else
+                    proposeHypothesisCandidate prams parent
             return proposal,cs,false
     }
 
@@ -199,32 +271,33 @@ module Vista =
             return runState
     }
 
-    let run cfg (geSys:GeSystem<'input,'output>) (tasksPareto:(int*GeTask<'input,'output>) seq) (tasksFeedback:GeTask<'input,'output> seq) = async {
-        try 
-            Log.info $"Start VISTA: budget: {cfg.budget}, mb:{cfg.mini_batch_size}, pareto:{Seq.length tasksPareto}, hypotheses:{cfg.vista.hypothesis_count}"
-            Log.info $"Start initial eval"
-            let initEVals = Scoring.score cfg geSys tasksPareto |> AsyncSeq.toBlockingSeq |> Seq.toList
-            let seedId = newId()
-            let runState = {
-                count = 0
-                candidates = [{
-                    id = seedId
-                    sys = geSys
-                    parent = None
-                    evals = initEVals
-                    origin = Seed
-                    history = []
-                }]
-                cfg = cfg
-                tasksPareto = tasksPareto
-                tasksFeedback = tasksFeedback
-                comboSet = Set.empty
-                currentBest = None
-                seedId = seedId
-                stalled = 0
-            }
-            return! loop runState
-        with ex -> 
-            Log.exn (ex,"Vista.run")
-            return raise ex
-    }
+    let run cfg (geSys:GeSystem<'input,'output>) (tasksPareto:(int*GeTask<'input,'output>) seq) (tasksFeedback:GeTask<'input,'output> seq) =
+        ScheduledRun.withScheduledGenerator cfg (fun cfg -> async {
+            try 
+                Log.info $"Start VISTA: budget: {cfg.budget}, mb:{cfg.mini_batch_size}, pareto:{Seq.length tasksPareto}, hypotheses:{cfg.vista.hypothesis_count}"
+                Log.info $"Start initial eval"
+                let initEVals = Scoring.score cfg geSys tasksPareto |> AsyncSeq.toBlockingSeq |> Seq.toList
+                let seedId = newId()
+                let runState = {
+                    count = 0
+                    candidates = [{
+                        id = seedId
+                        sys = geSys
+                        parent = None
+                        evals = initEVals
+                        origin = Seed
+                        history = []
+                    }]
+                    cfg = cfg
+                    tasksPareto = tasksPareto
+                    tasksFeedback = tasksFeedback
+                    comboSet = Set.empty
+                    currentBest = None
+                    seedId = seedId
+                    stalled = 0
+                }
+                return! loop runState
+            with ex -> 
+                Log.exn (ex,"Vista.run")
+                return raise ex
+        })

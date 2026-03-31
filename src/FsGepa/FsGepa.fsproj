@@ -16,12 +16,13 @@
   <ItemGroup>
     <Compile Include="AsyncExts.fs" />
     
-    <Compile Include="FsGepa.Log.fs" />
-    <Compile Include="Utils.fs" />
-    <Compile Include="Prompts.fs" />
-    <Compile Include="Core.fs" /><Compile Include="RuntimeTypes.fs" />
-    
-    <Compile Include="Telemetry.fs" /><Compile Include="Meta.fs" />
+	    <Compile Include="FsGepa.Log.fs" />
+	    <Compile Include="Utils.fs" />
+	    <Compile Include="Prompts.fs" />
+	    <Compile Include="Core.fs" /><Compile Include="RuntimeTypes.fs" />
+	    <Compile Include="CallScheduler.fs" />
+	    
+	    <Compile Include="Telemetry.fs" /><Compile Include="Meta.fs" />
     <Compile Include="Scoring.fs" />
     
     <Compile Include="Pareto.fs" />
