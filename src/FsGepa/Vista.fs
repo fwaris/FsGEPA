@@ -130,7 +130,9 @@ module Vista =
             Tlm.postRestartTriggered prams.cfg parent.id "blank_restart"
             let! prompt,changeSummaries = restartLookahead prams parent m seedEval
             let child = Reflective.setPrompt parent.sys m prompt
+            let mbSize = Seq.length prams.tasksMB
             let score = Scoring.averageScoreMultiModel prams.cfg prams.cfg.vista.validation_models child prams.tasksMB
+            let lookaheadSteps = max 1 prams.cfg.vista.restart_lookahead_steps
             let notes =
                 changeSummaries
                 |> List.filter notEmpty
@@ -161,6 +163,7 @@ module Vista =
                     restartReason = Some "blank_restart"
                     notes = notes
                 }
+                metricCost = mbSize + lookaheadSteps
             }
         | None ->
             Log.warn $"VISTA restart fallback to reflective update for module={m.moduleId}; no seed task was available."
@@ -187,9 +190,12 @@ module Vista =
                 validated
                 |> Array.choose id
                 |> Array.toList
-            match validated with
+            let mbSize = Seq.length prams.tasksMB
+            let kValidated = selectedHypotheses.Length
+            let improvers = validated |> List.filter (fun c -> c.score > parentScore)
+            match improvers with
             | _::_ ->
-                let best = validated |> List.maxBy (fun candidate -> candidate.score)
+                let best = improvers |> List.maxBy (fun candidate -> candidate.score)
                 return {
                     candidate = best.child
                     parentId = parent.id
@@ -211,6 +217,7 @@ module Vista =
                         restartReason = None
                         notes = Some best.changeSummary
                     }
+                    metricCost = mbSize * kValidated
                 }
             | [] ->
                 Log.warn $"VISTA fallback to reflective update for module={m.moduleId}; no hypotheses validated successfully."
@@ -232,20 +239,23 @@ module Vista =
     }
 
     let rec private loop (runState:GrRun<'input,'output>) = async {
-        if runState.count < runState.cfg.budget then 
-            Log.info $"run {runState.count}"
+        if runState.metricCalls < runState.cfg.budget then
+            Log.info $"run {runState.count}, metricCalls {runState.metricCalls}/{runState.cfg.budget}"
             let! filteredPool = Pareto.paretoPool runState
             Tlm.postFrontier runState.cfg filteredPool
             Log.info $"filtered pool {filteredPool.Length}"
             let tasksMB = Scoring.sampleMB runState.cfg runState.tasksFeedback
             let! proposal,comboSet',byMerge = getProposal runState filteredPool tasksMB
-            let newScore =
-                proposal.candidateMBScore
-                |> Option.defaultWith (fun () -> Scoring.averageScore runState.cfg proposal.candidate tasksMB)
+            let mbSize = Seq.length tasksMB
+            let proposalCost = proposal.metricCost
+            let newScore, scoringCost =
+                match proposal.candidateMBScore with
+                | Some s -> s, 0
+                | None -> Scoring.averageScore runState.cfg proposal.candidate tasksMB, mbSize
             let accepted = newScore > proposal.parentMBScore
             Log.info $"new candidate MB score: {newScore}, parent score: {proposal.parentMBScore}"
             let trace = finalizeTrace newScore accepted proposal.traceEntry
-            let runState =
+            let runState, evalCost =
                 if accepted then
                     let evals = Scoring.score runState.cfg proposal.candidate runState.tasksPareto |> AsyncSeq.toBlockingSeq |> Seq.toList
                     let parentHistory = historyFor runState proposal.parentId
@@ -260,14 +270,15 @@ module Vista =
                     if byMerge then
                         Tlm.postAddMerge runState.cfg newScore proposal.parentMBScore
                     Tlm.postCandidateAccepted runState.cfg trace
-                    {runState with candidates = cRun::runState.candidates; stalled = 0}
+                    {runState with candidates = cRun::runState.candidates; stalled = 0}, Seq.length runState.tasksPareto
                 else
                     Tlm.postCandidateRejected runState.cfg trace
-                    {runState with stalled = runState.stalled + 1}
+                    {runState with stalled = runState.stalled + 1}, 0
+            let roundCost = proposalCost + scoringCost + evalCost
             let runState = processNewBest runState
-            return! loop {runState with count = runState.count+1; comboSet = comboSet'}
+            return! loop {runState with count = runState.count+1; metricCalls = runState.metricCalls + roundCost; comboSet = comboSet'}
         else
-            Log.info $"Reached budget : {runState.cfg.budget}"
+            Log.info $"Reached budget : {runState.cfg.budget} (metricCalls={runState.metricCalls})"
             return runState
     }
 
@@ -276,10 +287,12 @@ module Vista =
             try 
                 Log.info $"Start VISTA: budget: {cfg.budget}, mb:{cfg.mini_batch_size}, pareto:{Seq.length tasksPareto}, hypotheses:{cfg.vista.hypothesis_count}"
                 Log.info $"Start initial eval"
-                let initEVals = Scoring.score cfg geSys tasksPareto |> AsyncSeq.toBlockingSeq |> Seq.toList
+                let! initEVals = Scoring.score cfg geSys tasksPareto |> AsyncSeq.toListAsync
                 let seedId = newId()
+                let initMetricCalls = Seq.length tasksPareto
                 let runState = {
                     count = 0
+                    metricCalls = initMetricCalls
                     candidates = [{
                         id = seedId
                         sys = geSys

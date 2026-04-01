@@ -2,8 +2,9 @@
 
 FsGepa is an F# implementation of prompt optimization for compound AI systems. The repo includes the standard `GEPA` optimizer and a `VISTA` optimizer mode for hypothesis-driven reflective updates and restart behavior.
 
-- [GEPA: Reflective Prompt Evolution Can Outperform Reinforcement Learning](https://arxiv.org/abs/2507.19457)
-- [Project write-up](https://www.linkedin.com/posts/activity-7384785782890356736-uViM?utm_source=share&utm_medium=member_desktop&rcm=ACoAAAAbaagBCG-0LlGBjghxmo7KKzbEXRHmiZ0)
+- Original paper [GEPA: Reflective Prompt Evolution Can Outperform Reinforcement Learning](https://arxiv.org/abs/2507.19457)
+- [Project write-up on LinkedIn (GEPA only)](https://www.linkedin.com/posts/activity-7384785782890356736-uViM?utm_source=share&utm_medium=member_desktop&rcm=ACoAAAAbaagBCG-0LlGBjghxmo7KKzbEXRHmiZ0)
+- [GEPA vs VISTA Comparison](/docs/gepa_vs_vista.md)
 
 ## Start here
 
@@ -64,6 +65,7 @@ Two sample projects are included in the repo today:
   - based on GSM8K
   - demonstrates a tighter exact-match benchmark for comparing `GEPA` and `VISTA`
   - includes both `defective` and `minimal` seeds modeled after the VISTA paper appendix
+  - > Note: stronger models (e.g. gpt-oss-20b and above) are not deterred by that `defective` seed. They produce good baselines results - which are harder to improve upon much with optimization. The `VISTA` paper uses a much smaller `Qwen3-4B` model to demonstrate the algorithm's effectiveness. 
 
 ## Performance
 

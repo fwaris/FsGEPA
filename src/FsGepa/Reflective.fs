@@ -64,6 +64,7 @@ module Reflective =
         let parentScore = evals |> List.averageBy (fun x -> x.eval.score)
         let! prompt = Llm.Meta.updatePrompt prams.cfg m mEvals
         let child = setPrompt candidate.sys m prompt
+        let mbSize = evals.Length
         let proposed = {
                             candidate = child
                             parentId = candidate.id
@@ -85,8 +86,9 @@ module Reflective =
                                 restartReason = None
                                 notes = None
                             }
+                            metricCost = mbSize
                         }
-        return proposed              
+        return proposed
     }
 
     ///single step of reflective prompt optimizer process

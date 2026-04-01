@@ -37,22 +37,25 @@ module Gepa =
 
 
     let rec internal loop (runState:GrRun<_,_>) = async {
-        if runState.count < runState.cfg.budget then 
-            Log.info $"run {runState.count}"
+        if runState.metricCalls < runState.cfg.budget then
+            Log.info $"run {runState.count}, metricCalls {runState.metricCalls}/{runState.cfg.budget}"
             let! filteredPool = Pareto.paretoPool runState
             Tlm.postFrontier runState.cfg filteredPool
             Log.info $"filtered pool {filteredPool.Length}"
             let tasksMB = Scoring.sampleMB runState.cfg runState.tasksFeedback
             let proposePrams = {step=runState.count; pool=filteredPool; cfg = runState.cfg; tasksMB = tasksMB; comboSet = runState.comboSet}
-            let! proposal,comboSet',byMerge = getProposal proposePrams        
-            let newScore =
-                proposal.candidateMBScore
-                |> Option.defaultWith (fun () -> Scoring.averageScore runState.cfg proposal.candidate tasksMB)
+            let! proposal,comboSet',byMerge = getProposal proposePrams
+            let mbSize = Seq.length tasksMB
+            let proposalCost = proposal.metricCost
+            let newScore, scoringCost =
+                match proposal.candidateMBScore with
+                | Some s -> s, 0
+                | None -> Scoring.averageScore runState.cfg proposal.candidate tasksMB, mbSize
             let accepted = newScore > proposal.parentMBScore
             Log.info $"new candidate MB score: {newScore}, parent score: {proposal.parentMBScore}"
             let trace = finalizeTrace newScore accepted proposal.traceEntry
-            let runState = 
-                if accepted then 
+            let runState, evalCost =
+                if accepted then
                     Tlm.postAdd runState.cfg byMerge newScore proposal.parentMBScore
                     let evals = Scoring.score runState.cfg proposal.candidate runState.tasksPareto |> AsyncSeq.toBlockingSeq |> Seq.toList
                     let cRun = {
@@ -64,14 +67,15 @@ module Gepa =
                         history = historyFor runState proposal.parentId @ [trace]
                     }
                     Tlm.postCandidateAccepted runState.cfg trace
-                    {runState with candidates = cRun::runState.candidates}
+                    {runState with candidates = cRun::runState.candidates}, Seq.length runState.tasksPareto
                 else
                     Tlm.postCandidateRejected runState.cfg trace
-                    runState
+                    runState, 0
+            let roundCost = proposalCost + scoringCost + evalCost
             let runState = processNewBest runState
-            return! loop {runState with count = runState.count+1; comboSet = comboSet'}
+            return! loop {runState with count = runState.count+1; metricCalls = runState.metricCalls + roundCost; comboSet = comboSet'}
         else
-            Log.info $"Reached budget : {runState.cfg.budget}"
+            Log.info $"Reached budget : {runState.cfg.budget} (metricCalls={runState.metricCalls})"
             return runState
     }
 
@@ -81,8 +85,10 @@ module Gepa =
             Log.info $"Start initial eval"
             let initEVals = Scoring.score cfg geSys tasksPareto |> AsyncSeq.toBlockingSeq |> Seq.toList
             let seedId = newId()
+            let initMetricCalls = Seq.length tasksPareto
             let runState = {
                 count=0
+                metricCalls = initMetricCalls
                 candidates= [{
                     id = seedId
                     sys = geSys
@@ -90,11 +96,11 @@ module Gepa =
                     evals = initEVals
                     origin = Seed
                     history = []
-                }]; 
-                cfg=cfg; 
-                tasksPareto=tasksPareto; 
+                }];
+                cfg=cfg;
+                tasksPareto=tasksPareto;
                 tasksFeedback = tasksFeedback
-                comboSet = Set.empty            
+                comboSet = Set.empty
                 currentBest = None
                 seedId = seedId
                 stalled = 0

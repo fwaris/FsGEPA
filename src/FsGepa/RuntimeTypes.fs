@@ -17,6 +17,7 @@ type GrSystem<'a,'b> = {
 
 type GrRun<'a,'b> = {
     count : int
+    metricCalls : int
     cfg : Config
     candidates : GrSystem<'a, 'b> list
     tasksPareto : seq<int * GeTask<'a,'b>>
@@ -34,6 +35,7 @@ type ProposedCandidate<'a,'b> = {
     candidateMBScore : float option
     origin : CandidateOrigin
     traceEntry : OptimizationTraceEntry
+    metricCost : int
 }
 
 type MergeProposal<'a,'b>  = Merge of ProposedCandidate<'a,'b> option * Set<Set<string>>

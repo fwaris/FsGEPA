@@ -127,6 +127,7 @@ module Merge =
                     |> String.concat ", "
                     |> fun xs -> if FsGepa.Utils.isEmpty xs then None else Some $"Merged modules: {xs}"
             }
+            metricCost = 0
         })
 
     let private withStep step (proposal:ProposedCandidate<'a,'b>) =
