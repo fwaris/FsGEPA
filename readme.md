@@ -65,7 +65,7 @@ Two sample projects are included in the repo today:
   - based on GSM8K
   - demonstrates a tighter exact-match benchmark for comparing `GEPA` and `VISTA`
   - includes both `defective` and `minimal` seeds modeled after the VISTA paper appendix
-  - > Note: stronger models (e.g. gpt-oss-20b and above) are not deterred by that `defective` seed. They produce good baselines results - which are harder to improve upon much with optimization. The `VISTA` paper uses a much smaller `Qwen3-4B` model to demonstrate the algorithm's effectiveness. 
+  - > Note: stronger models (e.g. gpt-oss-20b and above) are not deterred by that `defective` seed. They produce good baselines results on GSM8K - which are harder to improve upon much with further optimization. The `VISTA` paper uses a much smaller `Qwen3-4B` model to demonstrate the algorithm's effectiveness. 
 
 ## Performance
 
