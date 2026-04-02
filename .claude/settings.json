@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pdftotext /Users/Faisal.Waris1/.claude/projects/-Users-Faisal-Waris1-repos-FsGEPA/25c2ad52-d8a1-4a7c-a08b-aa5ce6e9381a/tool-results/webfetch-1775001225137-bluwna.pdf -)",
+      "Bash(pdftotext \"/Users/Faisal.Waris1/.claude/projects/-Users-Faisal-Waris1-repos-FsGEPA/25c2ad52-d8a1-4a7c-a08b-aa5ce6e9381a/tool-results/webfetch-1775001225137-bluwna.pdf\" /tmp/vista_paper.txt)",
+      "Read(//tmp/**)",
+      "Bash(dotnet build:*)",
+      "Bash(FSGEPA_GSM8K_COMPARE_BUDGET=500 FSGEPA_GSM8K_COMPARE_HOLDOUT=100 FSGEPA_FLOW_PARALLELISM=5 dotnet run --project src/FsgSample.Gsm8k -- compare defective both)"
+    ]
+  }
+}

@@ -15,5 +15,6 @@
         "gopts",
         "kwargs",
         "varname"
-    ]
+    ],
+    "workbench.colorTheme": "Tomorrow Night Blue"
 }

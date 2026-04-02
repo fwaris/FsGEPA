@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="FSharp.Core" Version="8.0.100" />
+    <PackageVersion Include="FParsec" Version="1.1.1" />
+    <PackageVersion Include="FSharp.Control.AsyncSeq" Version="3.2.1" />
+    <PackageVersion Include="FSharp.SystemTextJson" Version="1.4.36" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="[10,)" />
+    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.2.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.2.0-preview.1.26063.2" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="[10,)" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="[10,)" />
+    <PackageVersion Include="Microsoft.SemanticKernel" Version="[1.70,)" />
+  </ItemGroup>
+</Project>

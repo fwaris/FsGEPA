@@ -1,20 +1,36 @@
-namespace FsgGenAI
+namespace Harmony.Microsoft.Extensions.AI
 open System
 
-type AnswerWithCitations =
-    {
-        CitationIds : string list
-        Answer : string
-    }
-
+/// <summary>
+/// Input structure for supplying RAG content with citations ids.<br />
+/// With the right prompt, the LLM should return the citation ids of the
+/// content that it used to generate the answer. See also <see cref="AnswerWithCitations"/>. 
+/// </summary>
 type Citation =
     {
         Id: string
         Title: string
         Text: string
     }
+    
+/// <summary>
+/// LLM structured output schema for an 'answer with citations'.<br />
+/// LLM responds with this structure in a streaming fashion.<br />
+/// A StreamParser 'grammar' can be used to stream the Answer part out to app (chatbot).<br />
+/// When the stream is done, the citations is obtained as a separate list.
+/// Even though LLM is structured, it can still be dealt with in a streaming fashion.
+/// </summary>
+type AnswerWithCitations =
+    {
+        CitationIds : string list
+        Answer : string
+    }
 
+///Monadic parser to handle streaming 'structured' content with a supplied grammar. 
 module StreamParser =
+    let private checkEmpty (s:string) =
+        if String.IsNullOrWhiteSpace s then None else Some s
+
     type State =
         {
             SourceChunk : string
@@ -94,14 +110,14 @@ module StreamParser =
         match s.Current with
         | None  -> s, Empty (pchar c), None
         | Some c' when c = c' -> s.Step, Done None, None
-        | _ -> s, Fail $"pchar: Expected '{c}'", None
+        | _ -> s, Fail (sprintf "pchar: Expected '%c'" c), None
 
     let rec private _pcharlist (state:State) xs =
         match state.Current, xs with
         | _,  []                         -> state, Done None
         | Some c1, c2::rest when c1 = c2 -> _pcharlist state.Step rest
         | None, _                        -> state, Empty (pcharlist xs)
-        | Some c1, c2::_                 -> state, Fail $"pcharlist: Expected char {c2} got {c1}"
+        | Some c1, c2::_                 -> state, Fail (sprintf "pcharlist: Expected char %c got %c" c2 c1)
 
     ///recognize a continuous sequence of characters
     and pcharlist (xs:char list) (state:State) =
@@ -164,7 +180,7 @@ module StreamParser =
         match s.Current with
         | None      -> s, Empty p_strm_quoted_string, None
         | Some '"'  -> p_strm_quoted_string_cont "" s.Step
-        | Some c    -> fail s $"p_strm_quoted_string: Expected '\"' but got {c}"
+        | Some c    -> fail s (sprintf "p_strm_quoted_string: Expected '\"' but got %c" c)
     and p_strm_quoted_string_cont acc s =
         match mapString s.SourceChunk s.Index with
         | str,Continues      -> s, Empty (p_strm_quoted_string_cont ""), Some (acc + str)
@@ -184,7 +200,7 @@ module StreamParser =
         match s.Current with
         | None      -> s, Empty p_quoted_string, None
         | Some '"'  -> p_quoted_string_cont "" s.Step
-        | Some c    -> fail s $"p_quoted_string: Expected '\"' but got {c}"
+        | Some c    -> fail s (sprintf "p_quoted_string: Expected '\"' but got %c" c)
     and p_quoted_string_cont acc s =
         match mapString s.SourceChunk s.Index with
         | str,Continues      -> s, Empty (p_quoted_string_cont (acc + str)), None
@@ -208,7 +224,7 @@ module StreamParser =
             | None -> s, Empty p_string_list, None
             | Some '[' -> p_string_list_cont [] s.Step
             | Some 'n' -> p_null s
-            | Some c -> fail s $"p_string_list: Expected '[' but got {c}"
+            | Some c -> fail s (sprintf "p_string_list: Expected '[' but got %c" c)
     and p_null (s:State) = map (fun _ -> Some [])  (pstring "null") s 
     and p_string_list_cont acc (s:State) =
         match s.Current with
@@ -221,7 +237,12 @@ module StreamParser =
             | s, Done str, _   ->  p_string_list_cont (append acc str) s
             | s, Empty p, o    -> s, Empty (p .>>  (fun v o -> p_string_list_cont (append acc v))), o
             | s, Fail msg, o   -> s, Fail msg, o
-        | _                                 -> fail s $"p_string_list: Expected '\"' or ']' or ',' got {s.Current}"
+        | _                                 ->
+            let got =
+                match s.Current with
+                | Some ch -> sprintf "%c" ch
+                | None -> "EOF"
+            fail s (sprintf "p_string_list: Expected '\"' or ']' or ',' got %s" got)
 
     let  rec private _accumTill acc accT o (p:Parser<string>) (state:State) =
         match p state with 
@@ -253,8 +274,11 @@ module StreamParser =
 
 (*
 --------- Above is generic parsing code ----------
+Below are specific grammars
 *)
 
+module CitationsGrammar =
+    open StreamParser
     //Parse Citations
     
     let p_brace1 : Parser<string>    = pchar '{'
@@ -283,7 +307,21 @@ module StreamParser =
         .> p_strm_quoted_string .> p_ws .> p_brace2
 
 
+// testing helpers
+
+    let testCitations source =
+        let cits = ref []
+        ((citationsExp cits,(State.Empty,[])),source)
+        ||> Seq.scan updateState
+        |> Seq.collect (fun (_,(_,os)) -> List.rev os)
+        |> Seq.iter (printfn "%s")
+
+module HarmonyGrammar =
+    open StreamParser
     //Parse Harmony format think tokens
+
+    let private checkEmpty (s:string) =
+        if String.IsNullOrWhiteSpace s then None else Some s
 
     let p_channel : Parser<string> = pstring "<|channel|>"
     let p_message : Parser<string> = pstring "<|message|>"
@@ -298,12 +336,39 @@ module StreamParser =
         p_ws .> p_channel .> p_ws .> p_analysis .> p_ws .> p_message
         .> (p_thought thought) .> p_strm_any_string
 
+    let splitHarmony (text:string) =
+        let analysisPrefix = "<|channel|>analysis<|message|>"
+        let finalPrefix = "<|channel|>final<|message|>"
+        let endTag = "<|end|>"
 
-// testing helpers
+        let trimFinalPrefix (value:string) =
+            let trimmed = value.Trim()
+            if trimmed.StartsWith(finalPrefix, StringComparison.Ordinal) then
+                trimmed.Substring(finalPrefix.Length).Trim()
+            else
+                trimmed
 
-    let testCitations source =
-        let cits = ref []
-        ((citationsExp cits,(State.Empty,[])),source)
-        ||> Seq.scan updateState
-        |> Seq.collect (fun (_,(_,os)) -> List.rev os)
-        |> Seq.iter (printfn "%s")
+        if text.Contains(analysisPrefix, StringComparison.Ordinal) then
+            let startIdx = text.IndexOf(analysisPrefix, StringComparison.Ordinal) + analysisPrefix.Length
+            let endIdx = text.IndexOf(endTag, startIdx, StringComparison.Ordinal)
+            let thoughts =
+                if endIdx >= 0 then text.Substring(startIdx, endIdx - startIdx).Trim()
+                else text.Substring(startIdx).Trim()
+            let remainder =
+                if endIdx >= 0 then
+                    text.Substring(endIdx + endTag.Length)
+                    |> trimFinalPrefix
+                else
+                    ""
+            let output =
+                match checkEmpty remainder with
+                | Some value -> value
+                | None -> thoughts
+            output, checkEmpty thoughts
+        elif text.Contains(finalPrefix, StringComparison.Ordinal) then
+            let startIdx = text.IndexOf(finalPrefix, StringComparison.Ordinal) + finalPrefix.Length
+            let output = text.Substring(startIdx).Trim()
+            output, None
+        else
+            text.Trim(), None
+

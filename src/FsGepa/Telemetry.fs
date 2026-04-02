@@ -50,4 +50,36 @@ module Tlm =
         cfg.telemetry_channel
         |> Option.iter(fun c -> GeneratedPrompt prompt |> post c)
 
+    let postHypothesesGenerated cfg parentId moduleId (hypotheses:Hypothesis list) =
+        cfg.telemetry_channel
+        |> Option.iter(fun c ->
+            hypotheses
+            |> List.map (fun h -> h.id,h.label)
+            |> fun xs -> HypothesesGenerated {|parentId=parentId; moduleId=moduleId; hypotheses=xs|}
+            |> post c)
+
+    let postHypothesisValidated cfg parentId moduleId (hypothesis:Hypothesis) score parentScore =
+        cfg.telemetry_channel
+        |> Option.iter(fun c ->
+            HypothesisValidated {|
+                parentId = parentId
+                moduleId = moduleId
+                hypothesisId = hypothesis.id
+                label = hypothesis.label
+                score = score
+                parentScore = parentScore
+            |}
+            |> post c)
+
+    let postRestartTriggered cfg sourceId reason =
+        cfg.telemetry_channel
+        |> Option.iter(fun c -> RestartTriggered {|sourceId=sourceId; reason=reason|} |> post c)
+
+    let postCandidateAccepted cfg trace =
+        cfg.telemetry_channel
+        |> Option.iter(fun c -> CandidateAccepted trace |> post c)
+
+    let postCandidateRejected cfg trace =
+        cfg.telemetry_channel
+        |> Option.iter(fun c -> CandidateRejected trace |> post c)
 

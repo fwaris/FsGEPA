@@ -12,7 +12,6 @@ type FeverousInput = {
 }
 
 [<JsonConverter(typeof<JsonStringEnumConverter>)>]
-[<RequireQualifiedAccess>]
 type AnswerType =
     | SUPPORTS = 0
     | REFUTES = 1

@@ -7,8 +7,12 @@ open AsyncExts
 module Scoring =
 
     let sampleMB cfg tasks = 
-        let frac = float cfg.mini_batch_size / float cfg.feedback_tasks_count
-        tasks |> Seq.filter(fun _ -> Utils.rng.NextDouble() <= frac) |> Seq.indexed |> Seq.toList
+        let sampleSize = max 1 (min cfg.mini_batch_size cfg.feedback_tasks_count)
+        tasks
+        |> Seq.indexed
+        |> Seq.sortBy (fun _ -> Utils.rng.Next())
+        |> Seq.truncate sampleSize
+        |> Seq.toList
 
     let rec runTask attempts cfg sys ((i,task):int*GeTask<_,_>) =  
         async {
@@ -43,3 +47,19 @@ module Scoring =
         |> AsyncSeq.map (fun et -> et.eval.score)
         |> AsyncSeq.toBlockingSeq
         |> Seq.average
+
+    let withModelOverride model (sys:GeSystem<'a,'b>) =
+        {
+            sys with
+                modules =
+                    sys.modules
+                    |> Map.map (fun _ m -> {m with model = Some model})
+        }
+
+    let averageScoreMultiModel cfg models sys tasks =
+        match models with
+        | [] -> averageScore cfg sys tasks
+        | xs ->
+            xs
+            |> List.map (fun model -> withModelOverride model sys)
+            |> List.averageBy (fun candidate -> averageScore cfg candidate tasks)

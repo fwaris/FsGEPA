@@ -4,6 +4,15 @@ open FsGepa.Run
 
 module Gepa =
 
+    let private historyFor runState parentId =
+        runState.candidates
+        |> List.tryFind (fun c -> c.id = parentId)
+        |> Option.map _.history
+        |> Option.defaultValue []
+
+    let private finalizeTrace score accepted (trace:OptimizationTraceEntry) =
+        {trace with candidateScore = Some score; accepted = Some accepted}
+
     let internal tryMerge (prams:ProposePrams<'input,'output>) = async {
         let hasMultiple = prams.pool |> List.tryHead |> Option.map (fun s -> s.sys.modules.Count > 0 ) |> Option.defaultValue false
         if hasMultiple && rng.NextDouble() > prams.cfg.reflect_merge_split  then 
@@ -28,44 +37,73 @@ module Gepa =
 
 
     let rec internal loop (runState:GrRun<_,_>) = async {
-        if runState.count < runState.cfg.budget then 
-            Log.info $"run {runState.count}"
+        if runState.metricCalls < runState.cfg.budget then
+            Log.info $"run {runState.count}, metricCalls {runState.metricCalls}/{runState.cfg.budget}"
             let! filteredPool = Pareto.paretoPool runState
             Tlm.postFrontier runState.cfg filteredPool
             Log.info $"filtered pool {filteredPool.Length}"
             let tasksMB = Scoring.sampleMB runState.cfg runState.tasksFeedback
-            let proposePrams = {pool=filteredPool; cfg = runState.cfg; tasksMB = tasksMB; comboSet = runState.comboSet}
-            let! proposal,comboSet',byMerge = getProposal proposePrams        
-            let newScore = Scoring.averageScore runState.cfg proposal.candidate tasksMB
+            let proposePrams = {step=runState.count; pool=filteredPool; cfg = runState.cfg; tasksMB = tasksMB; comboSet = runState.comboSet}
+            let! proposal,comboSet',byMerge = getProposal proposePrams
+            let mbSize = Seq.length tasksMB
+            let proposalCost = proposal.metricCost
+            let newScore, scoringCost =
+                match proposal.candidateMBScore with
+                | Some s -> s, 0
+                | None -> Scoring.averageScore runState.cfg proposal.candidate tasksMB, mbSize
+            let accepted = newScore > proposal.parentMBScore
             Log.info $"new candidate MB score: {newScore}, parent score: {proposal.parentMBScore}"
-            let runState = 
-                if newScore > proposal.parentMBScore then 
+            let trace = finalizeTrace newScore accepted proposal.traceEntry
+            let runState, evalCost =
+                if accepted then
                     Tlm.postAdd runState.cfg byMerge newScore proposal.parentMBScore
                     let evals = Scoring.score runState.cfg proposal.candidate runState.tasksPareto |> AsyncSeq.toBlockingSeq |> Seq.toList
-                    let cRun = {id=newId(); sys = proposal.candidate; parent=Some proposal.parentId; evals=evals}
-                    {runState with candidates = cRun::runState.candidates}
+                    let cRun = {
+                        id = newId()
+                        sys = proposal.candidate
+                        parent = Some proposal.parentId
+                        evals = evals
+                        origin = proposal.origin
+                        history = historyFor runState proposal.parentId @ [trace]
+                    }
+                    Tlm.postCandidateAccepted runState.cfg trace
+                    {runState with candidates = cRun::runState.candidates}, Seq.length runState.tasksPareto
                 else
-                    runState
+                    Tlm.postCandidateRejected runState.cfg trace
+                    runState, 0
+            let roundCost = proposalCost + scoringCost + evalCost
             let runState = processNewBest runState
-            return! loop {runState with count = runState.count+1; comboSet = comboSet'}
+            return! loop {runState with count = runState.count+1; metricCalls = runState.metricCalls + roundCost; comboSet = comboSet'}
         else
-            Log.info $"Reached budget : {runState.cfg.budget}"
+            Log.info $"Reached budget : {runState.cfg.budget} (metricCalls={runState.metricCalls})"
             return runState
     }
 
-    let run cfg (geSys:GeSystem<'input,'output>) (tasksPareto:(int*GeTask<'input,'output>) seq) (tasksFeedback:GeTask<'input,'output> seq) = async {
+    let private runGepa cfg (geSys:GeSystem<'input,'output>) (tasksPareto:(int*GeTask<'input,'output>) seq) (tasksFeedback:GeTask<'input,'output> seq) = async {
         try 
             Log.info $"Start: budget: {cfg.budget}, mb:{cfg.mini_batch_size}, max attempts: ({cfg.max_attempts_find_pair}, {cfg.max_attempts_find_merge_parent}), pareto:{Seq.length tasksPareto}"
             Log.info $"Start initial eval"
             let initEVals = Scoring.score cfg geSys tasksPareto |> AsyncSeq.toBlockingSeq |> Seq.toList
+            let seedId = newId()
+            let initMetricCalls = Seq.length tasksPareto
             let runState = {
                 count=0
-                candidates= [{id=newId(); sys=geSys; parent=None; evals=initEVals}]; 
-                cfg=cfg; 
-                tasksPareto=tasksPareto; 
+                metricCalls = initMetricCalls
+                candidates= [{
+                    id = seedId
+                    sys = geSys
+                    parent = None
+                    evals = initEVals
+                    origin = Seed
+                    history = []
+                }];
+                cfg=cfg;
+                tasksPareto=tasksPareto;
                 tasksFeedback = tasksFeedback
-                comboSet = Set.empty            
+                comboSet = Set.empty
                 currentBest = None
+                seedId = seedId
+                stalled = 0
             }
             return! loop runState
         with ex -> 
@@ -73,3 +111,8 @@ module Gepa =
             return raise ex
     }
 
+    let run cfg (geSys:GeSystem<'input,'output>) (tasksPareto:(int*GeTask<'input,'output>) seq) (tasksFeedback:GeTask<'input,'output> seq) =
+        ScheduledRun.withScheduledGenerator cfg (fun cfg ->
+            match cfg.optimizer_mode with
+            | GepaMode -> runGepa cfg geSys tasksPareto tasksFeedback
+            | VistaMode -> Vista.run cfg geSys tasksPareto tasksFeedback)
